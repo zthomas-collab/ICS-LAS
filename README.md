@@ -8,15 +8,15 @@ Not a CRM, case-management or emergency-dispatch system. The map shows resources
 
 First vertical slice (Phases 0–2 + part of 3):
 
-- ✅ Organization registration → email confirmation → platform-admin verification (SOP-001) → suspension/reinstatement (SOP-012)
+- ✅ One "For organizations" page with **Sign in** and **Register** tabs; registration → email confirmation → platform-admin verification (SOP-001) → suspension/reinstatement (SOP-012)
 - ✅ Staging site and resource CRUD with four visibility levels, one-tap availability updates, corrections, append-only history and audit log
 - ✅ Visibility enforced in PostgreSQL (roles, RLS, public read-model views, triggers) and in services
 - ✅ Public MapLibre map with clustering, filters, text search, "near me", list view, stale-data banner, freshness ("Unconfirmed" after the category interval)
 - ✅ Account service types (supplies, water, food, shelter, FEMA/disaster case management, healthcare, …) — admin-confirmed at approval — drive marker colors, short codes and a filterable **map legend**
 - ✅ One photo per location (re-encoded, GPS/EXIF stripped), shown to exactly the people who can see the location
-- ✅ Public **Black Book** at `/black-book`: approved organizations that opted in, with call/email/website — no sign-in
-- ✅ 64 automated tests against real PostgreSQL 18 + PostGIS 3.6 (PGlite)
-- ⏳ Road reports, restricted Black Book contacts, dashboards, notification worker, managed auth/MFA — see [milestones](docs/05-milestones-acceptance.md)
+- ✅ Public **Contacts** at `/contacts` (the spec's Black Book): approved organizations that opted in, searchable by name, description, type and ZIP code with a radius filter — no sign-in
+- ✅ 71 automated tests against real PostgreSQL 18 + PostGIS 3.6 (PGlite)
+- ⏳ Road reports, restricted (authorized-only) contacts, dashboards, notification worker, managed auth/MFA — see [milestones](docs/05-milestones-acceptance.md)
 
 **Not production-ready.** Authentication is a development adapter, no email leaves the machine, and the basemap is a free no-SLA provider. See [assumptions & risks](docs/01-assumptions-risks.md).
 
@@ -28,7 +28,7 @@ npm run db:seed
 npm run admin:grant -- admin@example.test PLATFORM_ADMIN "local bootstrap"
 npm run dev
 ```
-Open http://localhost:3000. Sign-in links for local accounts appear at http://localhost:3000/dev/outbox. All seeded records are labelled **[SYNTHETIC]**.
+Open http://localhost:3000. Optional: load ZIP centroids for Contacts radius search with `npm run zips:import -- <Census ZCTA gazetteer .txt>`. Sign-in links for local accounts appear at http://localhost:3000/dev/outbox. All seeded records are labelled **[SYNTHETIC]**.
 
 ## Documentation
 

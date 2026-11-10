@@ -131,6 +131,55 @@ async function seed() {
   await db.close();
 }
 
+/**
+ * Loads ZIP centroids from the U.S. Census Bureau ZCTA Gazetteer file (public domain), e.g.
+ * 2024_Gaz_zcta_national.txt — tab-separated with columns GEOID ... INTPTLAT INTPTLONG.
+ * Download and unzip it from census.gov yourself, then: npm run zips:import -- <path-to-txt>
+ */
+async function importZips(file: string | undefined) {
+  if (!file) throw new Error("Usage: npm run zips:import -- <path to Census ZCTA gazetteer .txt>");
+  const { readFileSync } = await import("node:fs");
+  const lines = readFileSync(file, "utf8").split(/\r?\n/).filter((l) => l.trim());
+  const header = lines[0].split("\t").map((h) => h.trim().toUpperCase());
+  const iZip = header.indexOf("GEOID");
+  const iLat = header.indexOf("INTPTLAT");
+  const iLng = header.indexOf("INTPTLONG");
+  if (iZip < 0 || iLat < 0 || iLng < 0) throw new Error("Unrecognized file: expected GEOID, INTPTLAT and INTPTLONG columns");
+  const zips: string[] = [];
+  const lats: number[] = [];
+  const lngs: number[] = [];
+  let skipped = 0;
+  for (const line of lines.slice(1)) {
+    const c = line.split("\t").map((v) => v.trim());
+    const zip = c[iZip];
+    const lat = Number(c[iLat]);
+    const lng = Number(c[iLng]);
+    if (!/^[0-9]{5}$/.test(zip) || !Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) {
+      skipped++;
+      continue;
+    }
+    zips.push(zip);
+    lats.push(lat);
+    lngs.push(lng);
+  }
+  const db = await createDriver();
+  await migrate(db);
+  const BATCH = 2000;
+  for (let i = 0; i < zips.length; i += BATCH) {
+    await runIn(db, { kind: "system" }, (tx) =>
+      tx.query(
+        `INSERT INTO zip_codes (zip, location, source)
+         SELECT z, ST_SetSRID(ST_MakePoint(lng, lat), 4326)::geography, 'census_zcta'
+           FROM unnest($1::text[], $2::float8[], $3::float8[]) AS t(z, lat, lng)
+         ON CONFLICT (zip) DO UPDATE SET location = EXCLUDED.location, source = EXCLUDED.source, loaded_at = now()`,
+        [zips.slice(i, i + BATCH), lats.slice(i, i + BATCH), lngs.slice(i, i + BATCH)],
+      ),
+    );
+  }
+  console.log(`Loaded ${zips.length} ZIP centroids (${skipped} rows skipped).`);
+  await db.close();
+}
+
 async function main() {
   const [cmd, ...args] = process.argv.slice(2);
   if (cmd === "migrate") {
@@ -140,6 +189,8 @@ async function main() {
     await db.close();
   } else if (cmd === "seed") {
     await seed();
+  } else if (cmd === "zips") {
+    await importZips(args[0]);
   } else if (cmd === "grant") {
     const [email, role = "PLATFORM_ADMIN", reason = "Bootstrap via CLI"] = args;
     if (!email) throw new Error("Usage: npm run admin:grant -- <email> [role] [reason]");

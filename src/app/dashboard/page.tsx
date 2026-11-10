@@ -36,7 +36,7 @@ export default async function DashboardPage() {
       {orgs.length === 0 && (
         <div className="card mt-5 p-4">
           <p>You are not a member of any organization.</p>
-          <Link className="btn btn-primary mt-3" href="/register">Register an organization</Link>
+          <Link className="btn btn-primary mt-3" href="/signin?tab=register">Register an organization</Link>
         </div>
       )}
       {orgs.map((o, i) => {
@@ -54,7 +54,7 @@ export default async function DashboardPage() {
                 <ServiceBadge type={serviceTypes.find((t) => t.code === o.primaryServiceType)!} />
               )}
               {o.role === "ORG_ADMIN" && o.membershipStatus === "ACTIVE" && (
-                <Link className="ml-auto text-sm text-brand underline" href={`/dashboard/orgs/${o.id}/profile`}>Organization profile &amp; Black Book</Link>
+                <Link className="ml-auto text-sm text-brand underline" href={`/dashboard/orgs/${o.id}/profile`}>Organization profile &amp; public contact listing</Link>
               )}
             </div>
             <p className="mt-2 text-sm text-muted">{STATUS_TEXT[o.status]}</p>

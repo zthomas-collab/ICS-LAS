@@ -5,7 +5,7 @@ import sharp from "sharp";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Driver } from "@/server/db";
 import { runIn } from "@/server/db/context";
-import { getOrganizationProfile, listBlackBook, setPrimaryServiceType, updateOrganizationProfile } from "@/server/modules/directory";
+import { getOrganizationProfile, searchContacts, setPrimaryServiceType, updateOrganizationProfile } from "@/server/modules/directory";
 import { findSiteImage, processImage, removeSiteImage, sniffImageType, uploadSiteImage } from "@/server/modules/images";
 import { queryMap } from "@/server/modules/map";
 import { createSite } from "@/server/modules/sites";
@@ -35,9 +35,9 @@ beforeAll(async () => {
 });
 afterAll(async () => db?.close());
 
-describe("public Black Book", () => {
+describe("public Contacts", () => {
   it("anyone can read it without signing in; only consenting, approved organizations appear", async () => {
-    const names = (await listBlackBook(db)).map((e) => e.displayName);
+    const names = (await searchContacts(db)).entries.map((e) => e.displayName);
     expect(names).toEqual(["[TEST] Clinic Org", "[TEST] Water Org"]);
     expect(names).not.toContain("[TEST] No Consent Org");
     expect(names).not.toContain("[TEST] Pending Org");
@@ -46,7 +46,7 @@ describe("public Black Book", () => {
   });
 
   it("exposes only public channels — never the private contact email", async () => {
-    const json = JSON.stringify(await listBlackBook(db));
+    const json = JSON.stringify((await searchContacts(db)).entries);
     expect(json).toContain("public@example.test");
     expect(json).toContain("(555) 010-0000");
     expect(json).not.toContain("private-contact@example.test");
@@ -54,16 +54,16 @@ describe("public Black Book", () => {
   });
 
   it("filters by service type (primary or additional) and text", async () => {
-    expect((await listBlackBook(db, { service: "HEALTHCARE" })).map((e) => e.displayName)).toEqual(["[TEST] Clinic Org"]);
-    expect((await listBlackBook(db, { q: "water" })).map((e) => e.displayName)).toEqual(["[TEST] Water Org"]);
-    expect(await listBlackBook(db, { q: "%" })).toEqual([]); // LIKE wildcards are escaped
+    expect((await searchContacts(db, { service: "HEALTHCARE" })).entries.map((e) => e.displayName)).toEqual(["[TEST] Clinic Org"]);
+    expect((await searchContacts(db, { q: "water" })).entries.map((e) => e.displayName)).toEqual(["[TEST] Water Org"]);
+    expect((await searchContacts(db, { q: "%" })).entries).toEqual([]); // LIKE wildcards are escaped
   });
 
   it("org admins control consent; withdrawing removes the listing immediately", async () => {
     await updateOrganizationProfile(db, adminA, orgA, { publicPhone: "(555) 010-0111", publicEmail: "water@example.test", additionalServiceTypes: ["SUPPLIES"], directoryConsent: "" });
-    expect((await listBlackBook(db)).map((e) => e.displayName)).toEqual(["[TEST] Clinic Org"]);
+    expect((await searchContacts(db)).entries.map((e) => e.displayName)).toEqual(["[TEST] Clinic Org"]);
     await updateOrganizationProfile(db, adminA, orgA, { publicPhone: "(555) 010-0111", publicEmail: "water@example.test", additionalServiceTypes: ["SUPPLIES"], directoryConsent: "on" });
-    const entry = (await listBlackBook(db, { service: "SUPPLIES" }))[0];
+    const entry = (await searchContacts(db, { service: "SUPPLIES" })).entries[0];
     expect(entry).toMatchObject({ displayName: "[TEST] Water Org", publicEmail: "water@example.test", serviceType: "WATER", additionalServiceTypes: ["SUPPLIES"] });
     const audit = await runIn(db, { kind: "system" }, (tx) =>
       tx.query<{ action: string }>(`SELECT action FROM audit_logs WHERE subject_id = $1 ORDER BY occurred_at`, [orgA]),
@@ -179,5 +179,75 @@ describe("site images", () => {
     ))[0].id;
     expect(await findSiteImage(db, null, pub)).toBeNull();
     await runIn(db, { kind: "system" }, (tx) => tx.query(`UPDATE organizations SET publication_suspended = false WHERE id = $1`, [orgA]));
+  });
+});
+
+describe("Contacts search by text, type, ZIP and radius", () => {
+  beforeAll(async () => {
+    // Fixture ZIP centroids (approximate, test-only).
+    await runIn(db, { kind: "system" }, (tx) =>
+      tx.query(`INSERT INTO zip_codes (zip, location, source) VALUES
+        ('28801', ST_SetSRID(ST_MakePoint(-82.5515, 35.5951), 4326)::geography, 'test'),
+        ('28739', ST_SetSRID(ST_MakePoint(-82.4600, 35.3200), 4326)::geography, 'test')`),
+    );
+    // Organization with no public site, only a public office ZIP (~19.6 miles from 28801).
+    const officeOnly = await makeOrg(db, { name: "Office Only Org", serviceType: "LEGAL_TITLE", consent: true });
+    await runIn(db, { kind: "system" }, (tx) => tx.query(`UPDATE organizations SET public_postal_code = '28739' WHERE id = $1`, [officeOnly]));
+  });
+
+  const names = (r: { entries: { displayName: string }[] }) => r.entries.map((e) => e.displayName);
+
+  it("text search matches name, description and service type labels; multiple words must all match", async () => {
+    expect(names(await searchContacts(db, { q: "office only" }))).toEqual(["[TEST] Office Only Org"]);
+    expect(names(await searchContacts(db, { q: "case management" }))).toEqual(["[TEST] Clinic Org"]); // service label
+    expect(names(await searchContacts(db, { q: "title" }))).toEqual(["[TEST] Office Only Org"]);
+    expect(names(await searchContacts(db, { q: "clinic water" }))).toEqual([]);
+  });
+
+  it("ZIP + radius returns organizations within the distance, nearest first, with distances", async () => {
+    const near = await searchContacts(db, { zip: "28801", radius: "5" });
+    expect(near.zipResolution).toBe("zip_table");
+    expect(names(near)).toEqual(["[TEST] Water Org", "[TEST] Clinic Org"]);
+    expect(near.entries[0].distanceMiles).toBe(0);
+    expect(near.entries[1].distanceMiles).toBeGreaterThan(0);
+    expect(near.entries[1].distanceMiles).toBeLessThan(5);
+  });
+
+  it("the radius filter widens and narrows results (office-ZIP-only orgs included)", async () => {
+    expect(names(await searchContacts(db, { zip: "28801", radius: "10" }))).not.toContain("[TEST] Office Only Org");
+    const wide = await searchContacts(db, { zip: "28801", radius: "25" });
+    expect(names(wide)).toContain("[TEST] Office Only Org");
+    const d = wide.entries.find((e) => e.displayName === "[TEST] Office Only Org")!.distanceMiles!;
+    expect(d).toBeGreaterThan(18);
+    expect(d).toBeLessThan(21);
+    expect(names(wide).at(-1)).toBe("[TEST] Office Only Org"); // farthest last
+  });
+
+  it("combines ZIP with type and text filters", async () => {
+    expect(names(await searchContacts(db, { zip: "28801", radius: "25", service: "LEGAL_TITLE" }))).toEqual(["[TEST] Office Only Org"]);
+    expect(names(await searchContacts(db, { zip: "28801", radius: "25", q: "water" }))).toEqual(["[TEST] Water Org"]);
+  });
+
+  it("falls back to listed-site centroids for ZIPs missing from reference data, then to exact ZIP matching", async () => {
+    await createSite(db, editorB, orgB, site({ name: "Swannanoa clinic", lat: 35.5979, lng: -82.3996, postalCode: "28778" }));
+    const est = await searchContacts(db, { zip: "28778", radius: "5" });
+    expect(est.zipResolution).toBe("site_centroid");
+    expect(names(est)).toEqual(["[TEST] Clinic Org"]);
+    const unknown = await searchContacts(db, { zip: "99999", radius: "100" });
+    expect(unknown.zipResolution).toBe("unknown");
+    expect(unknown.entries).toEqual([]);
+  });
+
+  it("rejects malformed ZIP codes and radii outside the listed options", async () => {
+    await expect(searchContacts(db, { zip: "abcde" })).rejects.toMatchObject({ code: "VALIDATION" });
+    await expect(searchContacts(db, { zip: "28801", radius: "7" })).rejects.toMatchObject({ code: "VALIDATION" });
+  });
+
+  it("never matches restricted locations: a private site does not place an organization near a ZIP", async () => {
+    const hidden = await makeOrg(db, { name: "Hidden Site Org", serviceType: "SUPPLIES", consent: true, members: [{ userId: outsider, role: "EDITOR" }] });
+    await createSite(db, outsider, hidden, site({ name: "Secret depot", visibility: "PRIVATE_ORGANIZATION" }));
+    const r = await searchContacts(db, { zip: "28801", radius: "100" });
+    expect(names(r)).not.toContain("[TEST] Hidden Site Org");
+    expect(names(await searchContacts(db, { q: "hidden" }))).toEqual(["[TEST] Hidden Site Org"]); // still listed, just not by location
   });
 });

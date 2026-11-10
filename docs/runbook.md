@@ -10,6 +10,7 @@ npm run db:seed                 # creates .data/pglite, applies migrations, load
 npm run admin:grant -- you@example.test PLATFORM_ADMIN "local bootstrap"
 npm run dev                     # http://localhost:3000 ; emails appear at /dev/outbox
 npm run check                   # lint + typecheck + tests (in-memory PostGIS)
+npm run zips:import -- 2024_Gaz_zcta_national.txt   # optional: ZIP centroids for Contacts radius search
 ```
 PGlite is single-process: stop `npm run dev` before running `db:*`/`admin:*` scripts. Reset local data by deleting `.data/`.
 

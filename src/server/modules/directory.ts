@@ -23,60 +23,124 @@ export async function listServiceTypes(driver: Driver): Promise<ServiceType[]> {
   return rows.map((r) => ({ code: r.code, label: r.label, shortLabel: r.short_label, color: r.color, description: r.description }));
 }
 
-export type BlackBookEntry = {
+export type ContactEntry = {
   id: string;
   displayName: string;
   description: string | null;
   website: string | null;
   publicPhone: string | null;
   publicEmail: string | null;
+  publicPostalCode: string | null;
   serviceType: string;
   serviceLabel: string;
   serviceShort: string;
   serviceColor: string;
   additionalServiceTypes: string[];
   publicSiteCount: number;
+  /** Distance in miles from the searched ZIP to the nearest public location or office ZIP. */
+  distanceMiles: number | null;
   approvedAt: Date | null;
   updatedAt: Date;
   isSynthetic: boolean;
 };
 
-const blackBookQuery = z.object({
+export const RADIUS_OPTIONS_MILES = [5, 10, 25, 50, 100] as const;
+export const DEFAULT_RADIUS_MILES = 25;
+const METERS_PER_MILE = 1609.344;
+
+export const contactsQuerySchema = z.object({
   q: z.string().trim().max(80).optional().default(""),
   service: z
     .string()
     .regex(/^[A-Z_]{2,40}$/)
     .optional()
     .or(z.literal("").transform(() => undefined)),
+  zip: z
+    .string()
+    .trim()
+    .regex(/^[0-9]{5}$/, "Enter a 5-digit ZIP code")
+    .optional()
+    .or(z.literal("").transform(() => undefined)),
+  radius: z.coerce
+    .number()
+    .refine((v) => (RADIUS_OPTIONS_MILES as readonly number[]).includes(v), "Choose a listed radius")
+    .optional()
+    .default(DEFAULT_RADIUS_MILES),
 });
+
+export type ContactsSearch = {
+  entries: ContactEntry[];
+  zip: string | null;
+  radiusMiles: number;
+  /** "zip_table" = official ZIP centroid; "site_centroid" = estimated from listed sites; "unknown" = exact-ZIP matching only. */
+  zipResolution: "zip_table" | "site_centroid" | "unknown" | null;
+};
 
 function likePattern(q: string) {
   return `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
 }
 
-/** Anyone (no sign-in) can read the public Black Book. Runs as ics_anon against the read model only. */
-export async function listBlackBook(driver: Driver, raw: unknown = {}): Promise<BlackBookEntry[]> {
-  const q = blackBookQuery.parse(raw);
-  const rows = await runIn(driver, { kind: "anon" }, (tx) =>
-    tx.query<Record<string, unknown>>(
-      `SELECT id, display_name, description, website, public_phone, public_email, service_type, service_label,
-              service_short, service_color, additional_service_types, public_site_count, approved_at, updated_at, is_synthetic
-         FROM public_black_book
-        WHERE ($1 = '' OR display_name ILIKE $2 OR description ILIKE $2)
-          AND ($3::text IS NULL OR service_type = $3 OR $3 = ANY(additional_service_types))
-        ORDER BY display_name
+/**
+ * Public Contacts search (no sign-in). Runs as ics_anon against public read models only.
+ * Text terms match name, description and service types; ZIP + radius matches organizations
+ * with a public location (or public office ZIP) within the radius, nearest first.
+ */
+export async function searchContacts(driver: Driver, raw: unknown = {}): Promise<ContactsSearch> {
+  const parsed = contactsQuerySchema.safeParse(raw);
+  if (!parsed.success) throw new AppError("VALIDATION", parsed.error.issues[0]?.message ?? "Invalid search");
+  const q = parsed.data;
+  const terms = q.q.split(/\s+/).filter(Boolean).slice(0, 6).map(likePattern);
+  const zip = q.zip ?? null;
+  return runIn(driver, { kind: "anon" }, async (tx) => {
+    let zipResolution: ContactsSearch["zipResolution"] = null;
+    if (zip) {
+      const r = await tx.query<{ official: boolean; any: boolean }>(
+        `SELECT EXISTS (SELECT 1 FROM zip_codes WHERE zip = $1) AS official, ics.zip_point($1) IS NOT NULL AS any`,
+        [zip],
+      );
+      zipResolution = r[0].official ? "zip_table" : r[0].any ? "site_centroid" : "unknown";
+    }
+    const rows = await tx.query<Record<string, unknown>>(
+      `WITH origin AS (SELECT CASE WHEN $3::text IS NULL THEN NULL ELSE ics.zip_point($3) END AS pt)
+       SELECT c.id, c.display_name, c.description, c.website, c.public_phone, c.public_email, c.public_postal_code,
+              c.service_type, c.service_label, c.service_short, c.service_color, c.additional_service_types,
+              c.public_site_count, c.approved_at, c.updated_at, c.is_synthetic, d.dist_m
+         FROM public_contacts c
+        CROSS JOIN origin
+         LEFT JOIN LATERAL (
+              SELECT min(ST_Distance(x.loc, origin.pt)) AS dist_m
+                FROM (SELECT ps.location AS loc FROM public_sites ps WHERE ps.org_id = c.id
+                      UNION ALL
+                      SELECT ics.zip_point(c.public_postal_code) WHERE c.public_postal_code IS NOT NULL) x
+               WHERE origin.pt IS NOT NULL AND x.loc IS NOT NULL
+         ) d ON true
+        WHERE NOT EXISTS (SELECT 1 FROM unnest($1::text[]) t
+                           WHERE NOT (c.display_name ILIKE t OR coalesce(c.description, '') ILIKE t OR coalesce(c.service_text, '') ILIKE t))
+          AND ($2::text IS NULL OR c.service_type = $2 OR $2 = ANY (c.additional_service_types))
+          AND ($3::text IS NULL
+               OR (origin.pt IS NOT NULL AND d.dist_m <= $4)
+               OR (origin.pt IS NULL AND (c.public_postal_code = $3
+                   OR EXISTS (SELECT 1 FROM public_sites ps WHERE ps.org_id = c.id AND ps.postal_code = $3))))
+        ORDER BY d.dist_m NULLS LAST, c.display_name
         LIMIT 200`,
-      [q.q, likePattern(q.q), q.service ?? null],
-    ),
-  );
-  return rows.map((r) => ({
-    id: r.id as string, displayName: r.display_name as string, description: r.description as string | null,
-    website: r.website as string | null, publicPhone: r.public_phone as string | null, publicEmail: r.public_email as string | null,
-    serviceType: r.service_type as string, serviceLabel: r.service_label as string, serviceShort: r.service_short as string,
-    serviceColor: r.service_color as string, additionalServiceTypes: (r.additional_service_types as string[]) ?? [],
-    publicSiteCount: r.public_site_count as number, approvedAt: r.approved_at as Date | null, updatedAt: r.updated_at as Date,
-    isSynthetic: r.is_synthetic as boolean,
-  }));
+      [terms, q.service ?? null, zip, q.radius * METERS_PER_MILE],
+    );
+    return {
+      zip,
+      radiusMiles: q.radius,
+      zipResolution,
+      entries: rows.map((r) => ({
+        id: r.id as string, displayName: r.display_name as string, description: r.description as string | null,
+        website: r.website as string | null, publicPhone: r.public_phone as string | null,
+        publicEmail: r.public_email as string | null, publicPostalCode: r.public_postal_code as string | null,
+        serviceType: r.service_type as string, serviceLabel: r.service_label as string, serviceShort: r.service_short as string,
+        serviceColor: r.service_color as string, additionalServiceTypes: (r.additional_service_types as string[]) ?? [],
+        publicSiteCount: r.public_site_count as number,
+        distanceMiles: r.dist_m == null ? null : Math.round((Number(r.dist_m) / METERS_PER_MILE) * 10) / 10,
+        approvedAt: r.approved_at as Date | null, updatedAt: r.updated_at as Date, isSynthetic: r.is_synthetic as boolean,
+      })),
+    };
+  });
 }
 
 export const serviceTypeChangeSchema = z.object({
@@ -121,7 +185,7 @@ export async function setPrimaryServiceType(driver: Driver, adminUserId: string,
 
 export type OrganizationProfile = {
   id: string; displayName: string; status: string; description: string | null; website: string | null;
-  publicPhone: string | null; publicEmail: string | null; primaryServiceType: string | null;
+  publicPhone: string | null; publicEmail: string | null; publicPostalCode: string | null; primaryServiceType: string | null;
   requestedServiceType: string | null; offeredServiceTypes: string[]; directoryConsentAt: Date | null; canEdit: boolean;
 };
 
@@ -143,7 +207,7 @@ export async function getOrganizationProfile(driver: Driver, userId: string, org
     if (!role) throw new AppError("NOT_FOUND", "Organization not found.");
     const r = (
       await tx.query<Record<string, unknown>>(
-        `SELECT o.id, o.display_name, o.status::text AS status, o.description, o.website, o.public_phone, o.public_email,
+        `SELECT o.id, o.display_name, o.status::text AS status, o.description, o.website, o.public_phone, o.public_email, o.public_postal_code,
                 o.primary_service_type, o.requested_service_type, o.directory_consent_at,
                 coalesce((SELECT array_agg(service_type) FROM organization_service_types WHERE org_id = o.id), '{}') AS offered
            FROM organizations o WHERE o.id = $1`,
@@ -154,6 +218,7 @@ export async function getOrganizationProfile(driver: Driver, userId: string, org
       id: r.id as string, displayName: r.display_name as string, status: r.status as string,
       description: r.description as string | null, website: r.website as string | null,
       publicPhone: r.public_phone as string | null, publicEmail: r.public_email as string | null,
+      publicPostalCode: r.public_postal_code as string | null,
       primaryServiceType: r.primary_service_type as string | null, requestedServiceType: r.requested_service_type as string | null,
       offeredServiceTypes: r.offered as string[], directoryConsentAt: r.directory_consent_at as Date | null,
       canEdit: role === "ORG_ADMIN" && EDITABLE_STATES.includes(r.status as string),
@@ -176,6 +241,7 @@ export const profileSchema = z.object({
   publicEmail: optional(254)
     .transform((v) => (v ? v.toLowerCase() : null))
     .refine((v) => v === null || z.string().email().safeParse(v).success, "Enter a valid email"),
+  publicPostalCode: optional(5).refine((v) => v === null || /^[0-9]{5}$/.test(v), "Use a 5-digit ZIP code"),
   additionalServiceTypes: serviceTypeList,
   directoryConsent: checkbox,
 });
@@ -199,11 +265,11 @@ export async function updateOrganizationProfile(driver: Driver, userId: string, 
         throw new AppError("FORBIDDEN", "This organization's profile cannot be edited in its current state.");
       }
       await tx.query(
-        `UPDATE organizations SET description = $2, website = $3, public_phone = $4, public_email = $5,
+        `UPDATE organizations SET description = $2, website = $3, public_phone = $4, public_email = $5, public_postal_code = $8,
                 directory_consent_at = CASE WHEN $6 THEN coalesce(directory_consent_at, now()) ELSE NULL END,
                 directory_consent_by = CASE WHEN $6 THEN coalesce(directory_consent_by, $7::uuid) ELSE NULL END
           WHERE id = $1`,
-        [orgId, input.description, input.website, input.publicPhone, input.publicEmail, input.directoryConsent, userId],
+        [orgId, input.description, input.website, input.publicPhone, input.publicEmail, input.directoryConsent, userId, input.publicPostalCode],
       );
       const keep = [before.primary_type ?? before.requested].filter((v): v is string => Boolean(v));
       const offered = Array.from(new Set([...keep, ...input.additionalServiceTypes]));

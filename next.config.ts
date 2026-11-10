@@ -26,6 +26,10 @@ const nextConfig: NextConfig = {
   // Site photos up to 5 MB plus multipart overhead.
   experimental: { serverActions: { bodySizeLimit: "6mb" } },
   outputFileTracingIncludes: { "/**": ["./db/migrations/**"] },
+  async redirects() {
+    // "Black Book" was renamed to "Contacts".
+    return [{ source: "/black-book", destination: "/contacts", permanent: true }];
+  },
   async headers() {
     return [
       {

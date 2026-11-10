@@ -29,11 +29,11 @@ export default async function OrgProfilePage({ params }: { params: Promise<{ org
       <Link href="/dashboard" className="text-sm text-brand underline">← Dashboard</Link>
       <h1 className="mt-2 text-2xl font-bold">{profile.displayName}</h1>
       <p className="text-sm text-muted">
-        Public profile and Black Book listing.{" "}
+        Public profile and Contacts listing.{" "}
         {profile.directoryConsentAt ? (
           <>Listed publicly since <Timestamp value={profile.directoryConsentAt} prefix="consent" />.</>
         ) : (
-          "Not listed in the public Black Book."
+          "Not listed in public Contacts."
         )}
       </p>
       <div className="card mt-4 p-4">
@@ -46,6 +46,7 @@ export default async function OrgProfilePage({ params }: { params: Promise<{ org
               website: profile.website,
               publicPhone: profile.publicPhone,
               publicEmail: profile.publicEmail,
+              publicPostalCode: profile.publicPostalCode,
               additional: profile.offeredServiceTypes,
               consent: Boolean(profile.directoryConsentAt),
               primary: profile.primaryServiceType ?? profile.requestedServiceType,

@@ -115,7 +115,7 @@ export async function updateProfileAction(orgId: string, _prev: FormState, form:
     return toState(err);
   }
   revalidatePath(`/dashboard/orgs/${orgId}/profile`);
-  revalidatePath("/black-book");
+  revalidatePath("/contacts");
   return { ok: true, message: "Profile saved." };
 }
 

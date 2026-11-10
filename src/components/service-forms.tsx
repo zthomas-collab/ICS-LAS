@@ -82,8 +82,8 @@ export function ConsentField({ defaultChecked }: { defaultChecked?: boolean }) {
     <label className="flex items-start gap-3 rounded-lg border border-line p-3 text-sm">
       <input type="checkbox" name="directoryConsent" className="mt-1" defaultChecked={defaultChecked} />
       <span>
-        <strong>List us in the public Black Book.</strong> Anyone, without signing in, can see our organization name,
-        service types, description, public phone, public email and website. You can withdraw this at any time from your
+        <strong>List us in public Contacts.</strong> Anyone, without signing in, can see our organization name,
+        service types, description, public phone, public email, website and office ZIP code. You can withdraw this at any time from your
         organization profile. Your sign-in email is never published.
       </span>
     </label>
@@ -97,7 +97,7 @@ export function ProfileForm({
 }: {
   action: Action;
   serviceTypes: ServiceType[];
-  initial: { description: string | null; website: string | null; publicPhone: string | null; publicEmail: string | null; additional: string[]; consent: boolean; primary: string | null };
+  initial: { description: string | null; website: string | null; publicPhone: string | null; publicEmail: string | null; publicPostalCode: string | null; additional: string[]; consent: boolean; primary: string | null };
 }) {
   const [state, formAction] = useActionState(action, {});
   const primaryType = serviceTypes.find((t) => t.code === initial.primary);
@@ -125,11 +125,19 @@ export function ProfileForm({
           <FieldError state={state} name="publicEmail" />
         </label>
       </div>
-      <label className="field">
-        <span>Website</span>
-        <input name="website" type="url" className="input" placeholder="https://" maxLength={300} defaultValue={initial.website ?? ""} />
-        <FieldError state={state} name="website" />
-      </label>
+      <div className="grid gap-3 sm:grid-cols-[1fr_10rem]">
+        <label className="field">
+          <span>Website</span>
+          <input name="website" type="url" className="input" placeholder="https://" maxLength={300} defaultValue={initial.website ?? ""} />
+          <FieldError state={state} name="website" />
+        </label>
+        <label className="field">
+          <span>Office ZIP code</span>
+          <input name="publicPostalCode" className="input" inputMode="numeric" pattern="[0-9]{5}" maxLength={5} defaultValue={initial.publicPostalCode ?? ""} />
+          <FieldError state={state} name="publicPostalCode" />
+        </label>
+      </div>
+      <p className="-mt-2 text-xs text-muted">The office ZIP lets people find you in Contacts by distance even if you have no public location on the map.</p>
       <ServiceTypeFields serviceTypes={serviceTypes} state={state} showPrimary={false} defaultPrimary={initial.primary} defaultAdditional={initial.additional} />
       <ConsentField defaultChecked={initial.consent} />
       <SubmitButton>Save profile</SubmitButton>
@@ -241,7 +249,9 @@ export function RegisterForm({ action, serviceTypes }: { action: Action; service
       <ServiceTypeFields serviceTypes={serviceTypes} state={state} />
       <Field label="Public phone (optional)" name="publicPhone" type="tel" state={state} maxLength={40} />
       <Field label="Public email (optional)" name="publicEmail" type="email" state={state} maxLength={254}
-        hint="Shown in the Black Book if you opt in below. Can differ from your sign-in email." />
+        hint="Shown in Contacts if you opt in below. Can differ from your sign-in email." />
+      <Field label="Office ZIP code (optional)" name="publicPostalCode" state={state} inputMode="numeric" maxLength={5}
+        hint="Lets people find you in Contacts by distance." />
       <label className="field">
         <span>Public description (optional)</span>
         <textarea name="description" className="input" rows={3} maxLength={2000} />

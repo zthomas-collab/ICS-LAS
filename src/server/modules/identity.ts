@@ -53,6 +53,12 @@ export const registrationSchema = z.object({
     .max(254)
     .optional()
     .or(z.literal("").transform(() => undefined)),
+  publicPostalCode: z
+    .string()
+    .trim()
+    .regex(/^[0-9]{5}$/, "Use a 5-digit ZIP code")
+    .optional()
+    .or(z.literal("").transform(() => undefined)),
   primaryServiceType: serviceTypeCode,
   additionalServiceTypes: serviceTypeList,
   directoryConsent: checkbox,
@@ -104,8 +110,8 @@ async function registerTx(driver: Driver, input: RegistrationInput): Promise<{ o
     const org = await tx.query<{ id: string }>(
       `INSERT INTO organizations (legal_name, display_name, org_type, contact_email, website, public_phone,
                                   description, registration_notes, created_by, public_email, requested_service_type,
-                                  directory_consent_at, directory_consent_by)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11, CASE WHEN $12 THEN now() END, CASE WHEN $12 THEN $9::uuid END)
+                                  directory_consent_at, directory_consent_by, public_postal_code)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11, CASE WHEN $12 THEN now() END, CASE WHEN $12 THEN $9::uuid END, $13)
        RETURNING id`,
       [
         input.legalName,
@@ -120,6 +126,7 @@ async function registerTx(driver: Driver, input: RegistrationInput): Promise<{ o
         input.publicEmail ?? null,
         input.primaryServiceType,
         input.directoryConsent,
+        input.publicPostalCode ?? null,
       ],
     );
     const orgId = org[0].id;

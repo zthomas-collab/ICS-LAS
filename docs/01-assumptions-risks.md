@@ -40,3 +40,6 @@
 | R8 | PGlite PostGIS extension is experimental | Dev/prod behaviour drift | Production uses real PostGIS; CI should also run the suite against a real PostGIS container (add when Docker available) |
 | R9 | Dev auth adapter accidentally deployed | Account takeover | Adapter refuses to start when `NODE_ENV=production` unless `ALLOW_DEV_AUTH=never-in-prod` is unset — i.e. it throws; documented in runbook |
 | R10 | Scope creep toward case management/CRM | Mission drift, privacy risk | PRD §2; no tables for beneficiaries or requests |
+
+### Update — ZIP search (2026-11-10)
+- **M3 (partial):** Contacts ZIP + radius search needs ZIP centroids. Load the public-domain U.S. Census ZCTA Gazetteer (`npm run zips:import -- <file>`). Until loaded, a ZIP's center is *estimated* from listed public locations with that ZIP (the UI says so), and unknown ZIPs fall back to exact-ZIP matching. ZCTAs approximate USPS ZIPs; PO-box-only ZIPs are absent.

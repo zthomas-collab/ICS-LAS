@@ -30,9 +30,9 @@
 | 11 | Every visible UI action has real behavior | Unbuilt modules are not linked in navigation | ✅ (manual review) |
 | 12 | Demo data labelled synthetic | `is_synthetic` columns; `[SYNTHETIC]` names; **SYNTHETIC DEMO** badges in UI | ✅ |
 
-## Test inventory (64 tests, all passing at time of writing)
+## Test inventory (71 tests, all passing at time of writing)
 
-- `tests/blackbook-types-images.test.ts` — Black Book consent/visibility/no private fields, filters, ORG_ADMIN-only edits; approved-needs-type constraint, legend data on pins, admin-only type change; image sniffing, EXIF/GPS stripping + orientation, photo visibility per site rule, cross-org upload blocked, replace/remove history, suspension hides photos.
+- `tests/contacts-types-images.test.ts` — Contacts consent/visibility/no private fields, filters, ORG_ADMIN-only edits; approved-needs-type constraint, legend data on pins, admin-only type change; image sniffing, EXIF/GPS stripping + orientation, photo visibility per site rule, cross-org upload blocked, replace/remove history, suspension hides photos; Contacts text/type/ZIP/radius search, nearest-first ordering, office-ZIP orgs, centroid fallback, private sites never used for location matching.
 
 - `tests/migrations.test.ts` — migrations apply on PostgreSQL 18 + PostGIS 3.6 and are idempotent.
 - `tests/visibility.test.ts` — full visibility matrix, RLS raw-SQL bypass attempts, revoked access, suspension, resource vs site visibility, history immutability.

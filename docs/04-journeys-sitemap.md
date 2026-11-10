@@ -28,8 +28,8 @@ Signed-in responder sees AUTHORIZED_RESPONDERS sites only within their scope pol
 ### J5 — Admin suspends a compromised org (SOP-012) ✅ implemented
 `/admin/organizations` → **Suspend publication** with reason → all that org's listings disappear from public and network views at once; editing disabled; **Reinstate** reverses.
 
-### J6 — Anyone looks up an organization in the Black Book ✅ implemented
-`/black-book` (no sign-in) → search by name or filter by service type → **Call** / **Email** / **Website**. Only approved organizations that opted in are listed, with only the contact details they chose to publish.
+### J6 — Anyone looks up an organization in Contacts ✅ implemented
+`/contacts` (no sign-in; formerly "Black Book") → search by name, description or service type, and/or a ZIP code with a 5–100 mile radius (nearest first, distance shown) → **Call** / **Email** / **Website**. Only approved organizations that opted in are listed, with only the contact details they chose to publish.
 
 ### J7 — Account types and the map legend ✅ implemented
 Registrant picks a main service type (plus other services) → admin confirms or changes it when approving (required) → every location of that account is drawn in the type's color with a short code (e.g. **MED**, **H2O**, **CM**) → the map legend explains colors and filters by type. Admins can change the type later with a recorded reason.
@@ -38,7 +38,7 @@ Registrant picks a main service type (plus other services) → admin confirms or
 Org editor opens a site → **Add a photo** (phone camera or file) + description → photo is re-encoded with location metadata removed → shown on the map/list to exactly the people who can see the site.
 
 ### Planned journeys
-Road report submission/verification (Phase 5) · restricted (authorized-only) Black Book contacts (Phase 4) · stale-record reminder emails (Phase 6) · J9 public "report incorrect info" (Phase 6) · J10 staff invite/revoke (Phase 4).
+Road report submission/verification (Phase 5) · restricted (authorized-only) contacts (Phase 4) · stale-record reminder emails (Phase 6) · J9 public "report incorrect info" (Phase 6) · J10 staff invite/revoke (Phase 4).
 
 ## Sitemap
 
@@ -48,22 +48,23 @@ Legend: ✅ live in this slice · ⏳ planned (not linked in the UI until it wor
 Public
 ├── /                         ✅ Home / Map + List + Search + Filters
 ├── /safety                   ✅ About / Safety / corrections guidance
-├── /register                 ✅ Register organization
-├── /signin                   ✅ Organization sign-in (dev magic link)
+├── /register                 ↪ redirects to /signin?tab=register
+├── /signin                   ✅ For organizations: Sign in + Register tabs on one page
 ├── /auth/confirm             ✅ Email confirmation (POST)
 ├── /auth/callback            ✅ Sign-in link (POST)
 ├── /resources                ⏳ Find Resources (category landing pages)
 ├── /roads                    ⏳ Road Conditions
-├── /directory                ⏳ Nonprofit Directory (merged into Black Book for now)
-└── /black-book               ✅ Black Book — public contacts of approved, consenting organizations
+├── /directory                ⏳ Nonprofit Directory (merged into Contacts for now)
+├── /contacts                 ✅ Contacts (the spec's public Black Book) — name/description/type/ZIP + radius search
+└── /black-book               ↪ redirects to /contacts
 
 Authenticated
 ├── /dashboard                ✅ Organization Dashboard + My Staging Locations
 ├── /dashboard/orgs/:id/sites/new  ✅ New staging site
 ├── /dashboard/sites/:id      ✅ Site detail: inventory, Update Availability, history
 ├── /dashboard/roads/new      ⏳ Submit Road Report
-├── /dashboard/orgs/:id/profile ✅ My Organization Profile (public contacts, services, Black Book consent)
-├── /dashboard/black-book     ⏳ Authorized Black Book
+├── /dashboard/orgs/:id/profile ✅ My Organization Profile (public contacts, office ZIP, services, Contacts consent)
+├── /dashboard/contacts       ⏳ Authorized (restricted) contacts
 ├── /dashboard/notifications  ⏳ Notifications
 └── /dashboard/team           ⏳ Team & Permissions
 
