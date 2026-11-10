@@ -171,7 +171,12 @@ export async function queryMap(driver: Driver, viewerId: string | null, raw: unk
     : runIn(driver, { kind: "anon" }, (tx) => publicQuery(tx, r.data));
 }
 
-export type PlaceHit = { id: string; name: string; label: string; lat: number; lng: number };
+export type PlaceHit = {
+  id: string; name: string; label: string; lat: number; lng: number;
+  /** "zip" = the area of a ZIP code (center point); "site" = a listed location. */
+  kind: "zip" | "site";
+  approximate?: boolean;
+};
 
 const searchSchema = z.string().trim().min(2).max(80);
 
@@ -179,9 +184,30 @@ function likePattern(q: string) {
   return `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
 }
 
-/** Text search over stored site address fields (no external geocoder configured — missing input M3). */
+/**
+ * Map search. A 5-digit ZIP resolves to the ZIP's center (Census reference data, or estimated
+ * from listed public sites) so the map can move there even if no site lists that exact ZIP.
+ * Other text matches stored site address fields (no external geocoder configured — missing input M3).
+ */
 export async function searchPlaces(driver: Driver, viewerId: string | null, raw: unknown): Promise<PlaceHit[]> {
   const q = parseOrThrow(searchSchema, raw);
+  const zipHit: PlaceHit[] = [];
+  if (/^[0-9]{5}$/.test(q)) {
+    const z = await runIn(driver, { kind: "anon" }, (tx) =>
+      tx.query<{ lat: number | null; lng: number | null; official: boolean }>(
+        `SELECT ST_Y(p::geometry) AS lat, ST_X(p::geometry) AS lng,
+                EXISTS (SELECT 1 FROM zip_codes WHERE zip = $1) AS official
+           FROM (SELECT ics.zip_point($1) AS p) x`,
+        [q],
+      ),
+    );
+    if (z[0]?.lat != null && z[0]?.lng != null) {
+      zipHit.push({
+        id: `zip:${q}`, kind: "zip", name: `ZIP ${q}`, label: z[0].official ? "ZIP code area" : "ZIP code area (approximate)",
+        lat: Number(z[0].lat), lng: Number(z[0].lng), approximate: !z[0].official,
+      });
+    }
+  }
   const pattern = likePattern(q);
   const sql = (from: string, extra: string) => `
     SELECT id, name, concat_ws(', ', nullif(city, ''), nullif(county, ''), nullif(state, ''), nullif(postal_code, '')) AS label,
@@ -190,10 +216,11 @@ export async function searchPlaces(driver: Driver, viewerId: string | null, raw:
      WHERE (city ILIKE $1 OR county ILIKE $1 OR postal_code ILIKE $1 OR address_line ILIKE $1 OR name ILIKE $1) ${extra}
      ORDER BY updated_at DESC LIMIT 20`;
   const map = (rows: Record<string, unknown>[]) =>
-    rows.map((r) => ({ id: r.id as string, name: r.name as string, label: r.label as string, lat: Number(r.lat), lng: Number(r.lng) }));
-  return viewerId
-    ? runIn(driver, { kind: "viewer", userId: viewerId }, async (tx) =>
+    rows.map((r): PlaceHit => ({ id: r.id as string, kind: "site", name: r.name as string, label: r.label as string, lat: Number(r.lat), lng: Number(r.lng) }));
+  const sites = viewerId
+    ? await runIn(driver, { kind: "viewer", userId: viewerId }, async (tx) =>
         map(await tx.query(sql("staging_sites", "AND status = 'ACTIVE'"), [pattern])),
       )
-    : runIn(driver, { kind: "anon" }, async (tx) => map(await tx.query(sql("public_sites", ""), [pattern])));
+    : await runIn(driver, { kind: "anon" }, async (tx) => map(await tx.query(sql("public_sites", ""), [pattern])));
+  return [...zipHit, ...sites];
 }

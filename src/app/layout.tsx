@@ -21,9 +21,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:bg-surface focus:p-2">
           Skip to content
         </a>
-        <div role="note" className="bg-bad-bg px-4 py-1.5 text-center text-sm text-bad">
+        <aside aria-label="Emergency information" className="bg-bad-bg px-4 py-1.5 text-center text-sm text-bad">
           <strong>Life-threatening emergency? Call 911.</strong> This site lists resources; it does not dispatch help.
-        </div>
+        </aside>
         <header className="border-b border-line bg-surface">
           <nav aria-label="Main" className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2">
             <Link href="/" className="mr-auto text-lg font-bold text-brand">

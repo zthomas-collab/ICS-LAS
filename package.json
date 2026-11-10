@@ -15,12 +15,14 @@
     "admin:grant": "tsx scripts/cli.ts grant",
     "check": "npm run lint && npm run typecheck && npm test",
     "bench:viewport": "tsx scripts/bench-viewport.ts",
-    "zips:import": "tsx scripts/cli.ts zips"
+    "zips:import": "tsx scripts/cli.ts zips",
+    "predev": "node scripts/copy-vendor.mjs",
+    "prebuild": "node scripts/copy-vendor.mjs"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.16",
     "@electric-sql/pglite-postgis": "^0.2.16",
-    "maplibre-gl": "^5.24.0",
+    "maplibre-gl": "^6.17.0",
     "next": "^16.4.6",
     "pg": "^8.23.1",
     "react": "19.2.0",

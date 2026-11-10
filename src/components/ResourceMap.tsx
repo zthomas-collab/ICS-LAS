@@ -10,7 +10,7 @@ import {
   type AvailabilityStatus,
   type Freshness,
 } from "@/lib/domain";
-import type { MapResult, MapSite } from "@/server/modules/map";
+import type { MapResult, MapSite, PlaceHit } from "@/server/modules/map";
 import type { ServiceType } from "@/server/modules/directory";
 
 type Bbox = { w: number; s: number; e: number; n: number };
@@ -62,7 +62,8 @@ export default function ResourceMap({ categories, signedIn, serviceTypes }: { ca
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [view, setView] = useState<"map" | "list">("map");
   const [query, setQuery] = useState("");
-  const [hits, setHits] = useState<{ id: string; name: string; label: string; lat: number; lng: number }[] | null>(null);
+  const [hits, setHits] = useState<PlaceHit[] | null>(null);
+  const [searchNote, setSearchNote] = useState<string | null>(null);
   const [geoMsg, setGeoMsg] = useState<string | null>(null);
 
   const tooWide = bbox.e - bbox.w > MAX_SPAN || bbox.n - bbox.s > MAX_SPAN;
@@ -119,7 +120,9 @@ export default function ResourceMap({ categories, signedIn, serviceTypes }: { ca
     let cancelled = false;
     (async () => {
       try {
-        const maplibregl = (await import("maplibre-gl")).default;
+        const maplibregl = await import("maplibre-gl");
+        // v6 ships the worker as a separate ES module; serve it from our origin (scripts/copy-vendor.mjs).
+        maplibregl.setWorkerUrl(`/vendor/maplibre/maplibre-gl-worker.mjs?v=${maplibregl.getVersion()}`);
         if (cancelled || !mapEl.current) return;
         const map = new maplibregl.Map({
           container: mapEl.current,
@@ -231,11 +234,23 @@ export default function ResourceMap({ categories, signedIn, serviceTypes }: { ca
   async function runSearch(e: React.FormEvent) {
     e.preventDefault();
     if (query.trim().length < 2) return;
+    const term = query.trim();
     try {
-      const res = await fetch(`/api/map/search?q=${encodeURIComponent(query.trim())}`);
+      const res = await fetch(`/api/map/search?q=${encodeURIComponent(term)}`);
       const body = await res.json();
-      setHits(res.ok ? body.hits : []);
+      const found: PlaceHit[] = res.ok ? body.hits : [];
+      const zip = found.find((h) => h.kind === "zip");
+      if (zip) {
+        // A ZIP is a place: go there and let the viewport query list what's nearby.
+        flyTo(zip.lng, zip.lat, 11);
+        setSearchNote(`Showing the area around ZIP ${term}${zip.approximate ? " (approximate location)" : ""}.`);
+        setHits(found.filter((h) => h.kind === "site").length ? found.filter((h) => h.kind === "site") : null);
+      } else {
+        setSearchNote(/^[0-9]{5}$/.test(term) ? `We couldn't locate ZIP ${term}. Try a nearby city or move the map.` : null);
+        setHits(found);
+      }
     } catch {
+      setSearchNote(null);
       setHits([]);
     }
   }
@@ -268,6 +283,7 @@ export default function ResourceMap({ categories, signedIn, serviceTypes }: { ca
           <button className="btn btn-secondary whitespace-nowrap" type="button" onClick={nearMe}>Near me</button>
         </form>
         {geoMsg && <p role="status" className="mt-1 text-sm text-muted">{geoMsg}</p>}
+        {searchNote && <p role="status" className="mt-1 text-sm text-muted">{searchNote}</p>}
         {hits && (
           <div className="mt-2">
             {hits.length === 0 ? (

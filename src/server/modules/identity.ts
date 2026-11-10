@@ -104,9 +104,51 @@ export async function registerOrganization(driver: Driver, raw: unknown): Promis
   }
 }
 
+/**
+ * Issues a fresh email-confirmation link for an organization still in PENDING_EMAIL.
+ * Earlier unused confirmation links for that org are invalidated so only the newest works.
+ */
+async function sendConfirmation(tx: Tx, userId: string, orgId: string, email: string, displayName: string): Promise<void> {
+  await tx.query(
+    `UPDATE auth_tokens SET consumed_at = now()
+      WHERE user_id = $1 AND org_id = $2 AND purpose = 'EMAIL_CONFIRM' AND consumed_at IS NULL`,
+    [userId, orgId],
+  );
+  const token = await issueToken(tx, userId, "EMAIL_CONFIRM", EMAIL_CONFIRM_TTL_MIN, orgId);
+  await enqueueEmail(tx, {
+    kind: "EMAIL_CONFIRM",
+    to: email,
+    subject: `Confirm your email for ${displayName}`,
+    body:
+      `Confirm your email to submit ${displayName} for verification:\n` +
+      `${appBaseUrl()}/auth/confirm?token=${token}\n\nThis link expires in 24 hours. ` +
+      `If you did not register, ignore this email.`,
+  });
+}
+
 async function registerTx(driver: Driver, input: RegistrationInput): Promise<{ orgId: string }> {
   return runIn(driver, { kind: "system" }, async (tx) => {
     const user = await upsertUser(tx, input.email, input.contactName);
+    // Duplicate guard: the same person re-submitting the same organization name while an
+    // application is still open does not create a second organization. If it is still awaiting
+    // email confirmation, a new link is sent instead. The caller sees the same response either way.
+    const existing = await tx.query<{ id: string; status: string; display_name: string }>(
+      `SELECT o.id, o.status::text AS status, o.display_name FROM organizations o
+         JOIN organization_memberships m ON m.org_id = o.id AND m.user_id = $1
+        WHERE o.status IN ('PENDING_EMAIL','PENDING_VERIFICATION') AND lower(o.display_name) = lower($2)
+        ORDER BY o.created_at DESC LIMIT 1`,
+      [user.id, input.displayName],
+    );
+    if (existing.length) {
+      if (existing[0].status === "PENDING_EMAIL") {
+        await sendConfirmation(tx, user.id, existing[0].id, input.email, existing[0].display_name);
+      }
+      await writeAudit(tx, {
+        actorUserId: user.id, actorOrgId: existing[0].id, action: "ORG_REGISTRATION_DUPLICATE",
+        subjectType: "organization", subjectId: existing[0].id, details: { status: existing[0].status },
+      });
+      return { orgId: existing[0].id };
+    }
     const org = await tx.query<{ id: string }>(
       `INSERT INTO organizations (legal_name, display_name, org_type, contact_email, website, public_phone,
                                   description, registration_notes, created_by, public_email, requested_service_type,
@@ -139,16 +181,7 @@ async function registerTx(driver: Driver, input: RegistrationInput): Promise<{ o
       `INSERT INTO organization_memberships (org_id, user_id, role, status) VALUES ($1, $2, 'ORG_ADMIN', 'INVITED')`,
       [orgId, user.id],
     );
-    const token = await issueToken(tx, user.id, "EMAIL_CONFIRM", EMAIL_CONFIRM_TTL_MIN, orgId);
-    await enqueueEmail(tx, {
-      kind: "EMAIL_CONFIRM",
-      to: input.email,
-      subject: `Confirm your email for ${input.displayName}`,
-      body:
-        `Confirm your email to submit ${input.displayName} for verification:\n` +
-        `${appBaseUrl()}/auth/confirm?token=${token}\n\nThis link expires in 24 hours. ` +
-        `If you did not register, ignore this email.`,
-    });
+    await sendConfirmation(tx, user.id, orgId, input.email, input.displayName);
     await writeAudit(tx, {
       actorUserId: user.id,
       actorOrgId: orgId,
@@ -217,15 +250,29 @@ export async function confirmEmail(driver: Driver, token: string): Promise<{ ses
   });
 }
 
-/** Always succeeds from the caller's perspective (no account enumeration). */
+/**
+ * Always succeeds from the caller's perspective (no account enumeration).
+ * Confirmed users get a sign-in link. Applicants who never confirmed (lost or expired link)
+ * get fresh confirmation links for their pending applications instead — no dead end.
+ */
 export async function requestSignIn(driver: Driver, rawEmail: unknown): Promise<void> {
   const email = parseOrThrow(z.string().trim().toLowerCase().email().max(254), rawEmail);
   await runIn(driver, { kind: "system" }, async (tx) => {
-    const u = await tx.query<{ id: string }>(
-      `SELECT id FROM users WHERE email = $1 AND status = 'ACTIVE' AND email_verified_at IS NOT NULL`,
+    const u = await tx.query<{ id: string; verified: boolean }>(
+      `SELECT id, email_verified_at IS NOT NULL AS verified FROM users WHERE email = $1 AND status = 'ACTIVE'`,
       [email],
     );
     if (!u.length) return;
+    if (!u[0].verified) {
+      const pending = await tx.query<{ id: string; display_name: string }>(
+        `SELECT o.id, o.display_name FROM organizations o
+           JOIN organization_memberships m ON m.org_id = o.id AND m.user_id = $1
+          WHERE o.status = 'PENDING_EMAIL' ORDER BY o.created_at DESC LIMIT 3`,
+        [u[0].id],
+      );
+      for (const o of pending) await sendConfirmation(tx, u[0].id, o.id, email, o.display_name);
+      return;
+    }
     const token = await issueToken(tx, u[0].id, "SIGN_IN", SIGN_IN_TTL_MIN);
     await enqueueEmail(tx, {
       kind: "SIGN_IN",

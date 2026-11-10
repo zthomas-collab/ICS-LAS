@@ -42,7 +42,10 @@ export default async function OrganizationAccessPage({ searchParams }: { searchP
       <div className="card rounded-t-none border-t-0 p-4">
         {active === "signin" ? (
           <>
-            <p className="mb-3 text-sm text-muted">Already registered? Enter your work email and we&apos;ll send a one-time sign-in link.</p>
+            <p className="mb-3 text-sm text-muted">
+              Already registered? Enter your work email and we&apos;ll send a one-time sign-in link.{" "}
+              <strong>Never got (or lost) your confirmation email?</strong> Enter the same email — we&apos;ll send a new confirmation link.
+            </p>
             <SignInForm action={requestSignInAction} />
             <p className="mt-4 text-sm">
               New here? <Link className="font-semibold text-brand underline" href="/signin?tab=register">Register your organization</Link> — it takes about 3 minutes.

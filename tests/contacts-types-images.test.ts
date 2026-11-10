@@ -7,7 +7,7 @@ import type { Driver } from "@/server/db";
 import { runIn } from "@/server/db/context";
 import { getOrganizationProfile, searchContacts, setPrimaryServiceType, updateOrganizationProfile } from "@/server/modules/directory";
 import { findSiteImage, processImage, removeSiteImage, sniffImageType, uploadSiteImage } from "@/server/modules/images";
-import { queryMap } from "@/server/modules/map";
+import { queryMap, searchPlaces } from "@/server/modules/map";
 import { createSite } from "@/server/modules/sites";
 import { LocalObjectStore } from "@/server/storage";
 import { freshDb } from "./helpers/db";
@@ -249,5 +249,18 @@ describe("Contacts search by text, type, ZIP and radius", () => {
     const r = await searchContacts(db, { zip: "28801", radius: "100" });
     expect(names(r)).not.toContain("[TEST] Hidden Site Org");
     expect(names(await searchContacts(db, { q: "hidden" }))).toEqual(["[TEST] Hidden Site Org"]); // still listed, just not by location
+  });
+
+  it("map search treats a ZIP code as a place without revealing private locations", async () => {
+    const official = await searchPlaces(db, null, "28801");
+    expect(official[0]).toMatchObject({ kind: "zip", name: "ZIP 28801", approximate: false });
+    expect(official[0].lat).toBeCloseTo(35.5951, 3);
+    const estimated = await searchPlaces(db, null, "28778");
+    expect(estimated[0]).toMatchObject({ kind: "zip", approximate: true });
+    expect((await searchPlaces(db, null, "99999")).filter((h) => h.kind === "zip")).toEqual([]);
+    // A ZIP used only by a private site must not resolve (that would reveal where the site is).
+    const hidden = await makeOrg(db, { name: "Private Zip Org", serviceType: "SUPPLIES", members: [{ userId: outsider, role: "EDITOR" }] });
+    await createSite(db, outsider, hidden, site({ name: "Private depot", visibility: "PRIVATE_ORGANIZATION", postalCode: "28555", lat: 34.9, lng: -77.2 }));
+    expect(await searchPlaces(db, null, "28555")).toEqual([]);
   });
 });

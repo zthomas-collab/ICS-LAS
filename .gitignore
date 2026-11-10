@@ -44,3 +44,6 @@ next-env.d.ts
 /.data/
 .env*
 !.env.example
+
+# generated vendor assets (scripts/copy-vendor.mjs)
+/public/vendor/

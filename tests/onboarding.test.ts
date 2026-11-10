@@ -147,3 +147,47 @@ describe("organization onboarding (SOP-001)", () => {
     expect(await resolveSession(db, undefined)).toBeNull();
   });
 });
+
+describe("no applicant dead-ends (audit B3)", () => {
+  const app = { ...registration, displayName: "[TEST] Lost Link Relief", legalName: "[TEST] Lost Link Relief Inc.", email: "lostlink@example.test" };
+  const countOrgs = async () =>
+    (await runIn(db, { kind: "system" }, (tx) =>
+      tx.query<{ n: number }>(`SELECT count(*)::int AS n FROM organizations WHERE lower(display_name) = lower($1)`, [app.displayName]),
+    ))[0].n;
+
+  it("an applicant whose confirmation link expired gets a new one by requesting sign-in", async () => {
+    await registerOrganization(db, app);
+    const first = await latestLink(app.email, "/auth/confirm");
+    await runIn(db, { kind: "system" }, (tx) =>
+      tx.query(`UPDATE auth_tokens SET expires_at = now() - interval '1 minute' WHERE purpose = 'EMAIL_CONFIRM' AND consumed_at IS NULL`),
+    );
+    await expect(confirmEmail(db, first)).rejects.toMatchObject({ code: "VALIDATION" });
+    await requestSignIn(db, app.email);
+    const fresh = await latestLink(app.email, "/auth/confirm");
+    expect(fresh).not.toBe(first);
+    const r = await confirmEmail(db, fresh);
+    expect((await listMyOrganizations(db, r.userId))[0]).toMatchObject({ displayName: app.displayName, status: "PENDING_VERIFICATION" });
+  });
+
+  it("re-submitting the same application does not create a duplicate organization", async () => {
+    const again = { ...app, email: "dup@example.test", displayName: "[TEST] Dup Check Org" };
+    const a = await registerOrganization(db, again);
+    const b = await registerOrganization(db, { ...again, displayName: "[test] dup check org" });
+    expect(b.orgId).toBe(a.orgId);
+    const n = (await runIn(db, { kind: "system" }, (tx) =>
+      tx.query<{ n: number }>(`SELECT count(*)::int AS n FROM organizations WHERE lower(display_name) = '[test] dup check org'`),
+    ))[0].n;
+    expect(n).toBe(1);
+    // Older confirmation links are invalidated; only the newest works.
+    const tokens = await runIn(db, { kind: "system" }, (tx) =>
+      tx.query<{ open: number }>(`SELECT count(*)::int AS open FROM auth_tokens WHERE org_id = $1 AND purpose = 'EMAIL_CONFIRM' AND consumed_at IS NULL`, [a.orgId]),
+    );
+    expect(tokens[0].open).toBe(1);
+    expect(await countOrgs()).toBe(1);
+  });
+
+  it("the same person can still register a different organization", async () => {
+    const other = await registerOrganization(db, { ...app, displayName: "[TEST] Second Org", legalName: "[TEST] Second Org Inc." });
+    expect(other.orgId).toBeTruthy();
+  });
+});

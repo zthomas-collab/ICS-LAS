@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { freshDb } from "./helpers/db";
+import { runIn } from "@/server/db/context";
 import { directionsUrl, displayAvailability, isResourceVisibilityAllowed, telHref } from "@/lib/domain";
 
 describe("displayAvailability", () => {
@@ -34,5 +36,19 @@ describe("contact helpers", () => {
   it("builds safe tel: and directions links", () => {
     expect(telHref("(828) 555-0100 ext")).toBe("tel:8285550100");
     expect(directionsUrl(35.5951234, -82.5515)).toBe("https://www.openstreetmap.org/directions?to=35.595123%2C-82.551500");
+  });
+});
+
+describe("service type colors (accessibility)", () => {
+  it("every color gives white text at least 4.5:1 contrast, and the database rejects darker-failing colors", async () => {
+    const db = await freshDb();
+    const rows = await runIn(db, { kind: "system" }, (tx) =>
+      tx.query<{ code: string; ratio: string }>(`SELECT code, ics.white_text_contrast(color)::text AS ratio FROM service_types`),
+    );
+    for (const r of rows) expect(Number(r.ratio), r.code).toBeGreaterThanOrEqual(4.5);
+    await expect(
+      runIn(db, { kind: "system" }, (tx) => tx.query(`UPDATE service_types SET color = '#ffcc00' WHERE code = 'FOOD'`)),
+    ).rejects.toThrow(/service_types_color_contrast/);
+    await db.close();
   });
 });

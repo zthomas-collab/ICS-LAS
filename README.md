@@ -15,7 +15,7 @@ First vertical slice (Phases 0–2 + part of 3):
 - ✅ Account service types (supplies, water, food, shelter, FEMA/disaster case management, healthcare, …) — admin-confirmed at approval — drive marker colors, short codes and a filterable **map legend**
 - ✅ One photo per location (re-encoded, GPS/EXIF stripped), shown to exactly the people who can see the location
 - ✅ Public **Contacts** at `/contacts` (the spec's Black Book): approved organizations that opted in, searchable by name, description, type and ZIP code with a radius filter — no sign-in
-- ✅ 71 automated tests against real PostgreSQL 18 + PostGIS 3.6 (PGlite)
+- ✅ 76 automated tests against real PostgreSQL 18 + PostGIS 3.6 (PGlite)
 - ⏳ Road reports, restricted (authorized-only) contacts, dashboards, notification worker, managed auth/MFA — see [milestones](docs/05-milestones-acceptance.md)
 
 **Not production-ready.** Authentication is a development adapter, no email leaves the machine, and the basemap is a free no-SLA provider. See [assumptions & risks](docs/01-assumptions-risks.md).
