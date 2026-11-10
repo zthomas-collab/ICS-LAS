@@ -1,0 +1,9 @@
+{
+  "name": "ICS-LAS Resource Map",
+  "short_name": "ICS-LAS",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f7f7f5",
+  "theme_color": "#0f4c5c",
+  "icons": []
+}
