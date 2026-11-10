@@ -31,10 +31,13 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         </aside>
         <header className="bg-brand text-white">
           <nav aria-label="Main" className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-1 gap-y-1 px-4 py-2">
-            <Link href="/" className="mr-auto flex items-center gap-2 py-1 text-xl font-extrabold tracking-tight text-white" aria-label="HopeGrid home">
-              <HopeGridMark />
-              <span>Hope<span className="text-mint">Grid</span></span>
-            </Link>
+            <div className="mr-auto flex flex-wrap items-baseline gap-x-3 gap-y-0 py-1">
+              <Link href="/" className="flex items-center gap-2 self-center text-xl font-extrabold tracking-tight text-white" aria-label="HopeGrid home">
+                <HopeGridMark />
+                <span>Hope<span className="text-mint">Grid</span></span>
+              </Link>
+              <span className="text-xs font-semibold text-mint sm:text-sm">Help Is Closer Than You Think.</span>
+            </div>
             <Link href="/" className={navLink}>Map</Link>
             <Link href="/contacts" className={navLink}>Contacts</Link>
             <Link href="/safety" className={navLink}>Safety</Link>

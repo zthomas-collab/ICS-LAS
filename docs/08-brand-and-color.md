@@ -2,10 +2,10 @@
 
 HopeGrid (repository: ICS-LAS) is operated by Hiraeth Ventures.
 
-- **Primary headline:** Help Is Closer Than You Think.
+- **Primary headline:** Help Is Closer Than You Think. — shown in the header beside the HopeGrid wordmark in smaller lettering (mint on forest green, 5.8:1), on every page
 - **Primary call to action:** Find Help Near Me — gold button to the right of the map search bar (full width under it on phones); uses the device location, then shows the nearest help first
 - **Organization call to action:** Register Your Organization — gold button in the header (signed-out visitors)
-- The hero shows the headline only. ("Explore Resource Map" and the duplicate green Register button were removed on request.)
+- No separate hero band on the home page; the map and search start directly under the header. ("Explore Resource Map" and the duplicate green Register button were removed on request.)
 
 ## Brand palette
 
