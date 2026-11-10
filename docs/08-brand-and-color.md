@@ -3,9 +3,9 @@
 HopeGrid (repository: ICS-LAS) is operated by Hiraeth Ventures.
 
 - **Primary headline:** Help Is Closer Than You Think.
-- **Primary call to action:** Find Help Near Me (uses the device location, then shows the nearest help first)
-- **Secondary call to action:** Explore Resource Map
-- **Organization call to action:** Register Your Organization
+- **Primary call to action:** Find Help Near Me — gold button to the right of the map search bar (full width under it on phones); uses the device location, then shows the nearest help first
+- **Organization call to action:** Register Your Organization — gold button in the header (signed-out visitors)
+- The hero shows the headline only. ("Explore Resource Map" and the duplicate green Register button were removed on request.)
 
 ## Brand palette
 
@@ -41,7 +41,7 @@ Each organization's admin-confirmed type colors its map pins, with a short code 
 
 ## Map key
 
-The map key on the map (collapsed on phones, always shown on larger screens) explains every color and mark used:
+The map key is a column on the **left side of the map running from its top to its bottom** (scrolls inside; always shown on screens 768 px and wider). On phones it is a “Map key” button that opens the same full-height panel over the left of the map. It explains every color and mark used:
 1. **Availability** — the lettered badge on each pin (A / L / D / C / ?) with the matching status pill.
 2. **Organization type** — pin color + code; tapping a type filters the map.
 3. **Other marks** — numbered forest-green circles (groups of locations) and the thick dark outline (restricted, signed-in only).

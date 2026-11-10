@@ -3,7 +3,6 @@
 import "maplibre-gl/dist/maplibre-gl.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Map as MLMap, GeoJSONSource } from "maplibre-gl";
-import Link from "next/link";
 import {
   STATUS_KEY,
   bestSiteStatus,
@@ -296,12 +295,6 @@ export default function ResourceMap({ categories, signedIn, serviceTypes }: { ca
     );
   }
 
-  function exploreMap() {
-    setView("map");
-    mapEl.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-    mapEl.current?.focus({ preventScroll: true });
-  }
-
   const toggleService = (code: string) =>
     setSelectedServices((c) => (c.includes(code) ? c.filter((x) => x !== code) : [...c, code]));
   const toggleCat = (code: string) => setSelectedCats((c) => (c.includes(code) ? c.filter((x) => x !== code) : [...c, code]));
@@ -309,29 +302,25 @@ export default function ResourceMap({ categories, signedIn, serviceTypes }: { ca
   // ---- render ------------------------------------------------------------
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <section aria-labelledby="hero-h" className="border-b border-line bg-mint-soft px-4 py-4 sm:py-5">
-        <div className="mx-auto flex max-w-6xl flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <div>
-            <h1 id="hero-h" className="text-2xl font-extrabold tracking-tight sm:text-3xl" style={{ color: "var(--hope-forest)" }}>
-              Help Is Closer Than You Think.
-            </h1>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <button type="button" className="btn btn-attention text-base" onClick={nearMe}>
-              <svg width="18" height="18" viewBox="0 0 16 16" aria-hidden><path d="M8 1.5c-2.6 0-4.5 2-4.5 4.4 0 3.3 4.5 8.6 4.5 8.6s4.5-5.3 4.5-8.6C12.5 3.5 10.6 1.5 8 1.5z" fill="currentColor" /><circle cx="8" cy="6" r="1.7" fill="#F0B84B" /></svg>
-              Find Help Near Me
-            </button>
-            <button type="button" className="btn btn-secondary" onClick={exploreMap}>Explore Resource Map</button>
-            <Link href="/signin?tab=register" className="btn btn-primary">Register Your Organization</Link>
-          </div>
+      <section aria-labelledby="hero-h" className="border-b border-line bg-mint-soft px-4 py-3 sm:py-4">
+        <div className="mx-auto max-w-6xl">
+          <h1 id="hero-h" className="text-2xl font-extrabold tracking-tight sm:text-3xl" style={{ color: "var(--hope-forest)" }}>
+            Help Is Closer Than You Think.
+          </h1>
         </div>
       </section>
       <div className="border-b border-line bg-surface px-3 py-2">
-        <form onSubmit={runSearch} role="search" className="flex gap-2">
-          <label htmlFor="q" className="sr-only">Search by city, county, ZIP or address</label>
-          <input id="q" className="input" placeholder="City, county, ZIP or address" value={query} onChange={(e) => setQuery(e.target.value)} />
-          <button className="btn btn-primary" type="submit">Search</button>
-        </form>
+        <div className="flex flex-wrap gap-2">
+          <form onSubmit={runSearch} role="search" className="flex min-w-[16rem] flex-1 gap-2">
+            <label htmlFor="q" className="sr-only">Search by city, county, ZIP or address</label>
+            <input id="q" className="input" placeholder="City, county, ZIP or address" value={query} onChange={(e) => setQuery(e.target.value)} />
+            <button className="btn btn-primary" type="submit">Search</button>
+          </form>
+          <button type="button" className="btn btn-attention w-full whitespace-nowrap sm:w-auto" onClick={nearMe}>
+            <svg width="18" height="18" viewBox="0 0 16 16" aria-hidden><path d="M8 1.5c-2.6 0-4.5 2-4.5 4.4 0 3.3 4.5 8.6 4.5 8.6s4.5-5.3 4.5-8.6C12.5 3.5 10.6 1.5 8 1.5z" fill="currentColor" /><circle cx="8" cy="6" r="1.7" fill="#F0B84B" /></svg>
+            Find Help Near Me
+          </button>
+        </div>
         {geoMsg && <p role="status" className="mt-1 text-sm text-muted">{geoMsg}</p>}
         {searchNote && <p role="status" className="mt-1 text-sm text-muted">{searchNote}</p>}
         {hits && (
@@ -388,23 +377,26 @@ export default function ResourceMap({ categories, signedIn, serviceTypes }: { ca
         )}
       </div>
 
-      <div className="relative flex min-h-0 flex-1">
+      {/* Fixed height on larger screens so the map key and list scroll inside the map area. */}
+      <div className="relative flex min-h-0 flex-1 md:h-[78vh] md:min-h-[30rem] md:flex-none">
         <div className={`${view === "map" ? "flex" : "hidden"} relative min-h-[55vh] flex-1 md:flex`}>
-          {mapFailed ? (
-            <div className="m-4 self-start rounded-md bg-warn-bg p-3 text-sm text-warn">
-              The map could not load on this device or network. Use the list — it shows the same results.
-            </div>
-          ) : (
-            // Inline position wins over .maplibregl-map { position: relative } from MapLibre's stylesheet.
-            <div ref={mapEl} tabIndex={-1} style={{ position: "absolute", inset: 0 }} role="region" aria-label="Resource map" />
-          )}
           {!mapFailed && (
             <Legend serviceTypes={serviceTypes} selected={selectedServices} onToggle={toggleService} onReset={() => setSelectedServices([])} />
           )}
+          <div className="relative min-w-0 flex-1">
+            {mapFailed ? (
+              <div className="m-4 self-start rounded-md bg-warn-bg p-3 text-sm text-warn">
+                The map could not load on this device or network. Use the list — it shows the same results.
+              </div>
+            ) : (
+              // Inline position wins over .maplibregl-map { position: relative } from MapLibre's stylesheet.
+              <div ref={mapEl} tabIndex={-1} style={{ position: "absolute", inset: 0 }} role="region" aria-label="Resource map" />
+            )}
+          </div>
         </div>
         <aside
           aria-label="Resource list"
-          className={`${view === "list" || mapFailed ? "block" : "hidden"} w-full overflow-y-auto border-l border-line bg-bg md:block md:w-[26rem] md:flex-none ${stale ? "opacity-70" : ""}`}
+          className={`${view === "list" || mapFailed ? "block" : "hidden"} relative w-full overflow-y-auto border-l border-line bg-bg md:block md:w-[22rem] md:flex-none xl:w-[26rem] ${stale ? "opacity-70" : ""}`}
         >
           {selected && <SiteDetail site={selected} stale={stale} onClose={() => setSelectedId(null)} />}
           <h2 className="px-3 pt-3 text-sm font-semibold text-muted">
@@ -516,18 +508,26 @@ function SiteDetail({ site, stale, onClose }: { site: MapSite; stale: boolean; o
   );
 }
 
-/** Map key: explains every color and mark used on the map. Always visible on larger screens. */
+/**
+ * Map key: explains every color and mark used on the map. On larger screens it is a fixed
+ * column on the left running the full height of the map. On phones it is a button that opens
+ * the same full-height panel over the left side of the map.
+ */
 function Legend({ serviceTypes, selected, onToggle, onReset }: { serviceTypes: ServiceType[]; selected: string[]; onToggle: (code: string) => void; onReset: () => void }) {
   const [open, setOpen] = useState(false);
   return (
-    <div className="absolute bottom-8 left-2 z-10 max-h-[75%] w-[17rem] max-w-[calc(100%-1rem)] overflow-y-auto rounded-lg border border-line bg-surface p-2 text-xs shadow-lg">
-      <h2 className="m-0">
+    <div
+      className={`z-10 flex flex-col bg-surface text-xs md:static md:w-56 md:flex-none xl:w-64 md:rounded-none md:border-0 md:border-r md:border-line md:shadow-none ${
+        open ? "absolute inset-y-0 left-0 w-[17rem] max-w-[85%] border-r border-line shadow-lg" : "absolute left-2 top-2 rounded-lg border border-line shadow"
+      }`}
+    >
+      <h2 className="m-0 border-line px-2 py-2 md:border-b">
       <button type="button" className="flex w-full items-center justify-between gap-2 text-sm font-bold md:cursor-default" aria-expanded={open} aria-controls="map-key" onClick={() => setOpen((v) => !v)}>
         Map key{selected.length ? ` · ${selected.length} type${selected.length === 1 ? "" : "s"} shown` : ""}
         <span aria-hidden className="md:hidden">{open ? "▾" : "▸"}</span>
       </button>
       </h2>
-      <div id="map-key" className={`${open ? "block" : "hidden"} md:block`}>
+      <div id="map-key" className={`${open ? "block" : "hidden"} min-h-0 flex-1 overflow-y-auto px-2 pb-3 md:block`}>
         <h3 className="mt-2 font-bold text-ink">Availability (badge on each pin)</h3>
         <ul className="mt-1 grid gap-1">
           {STATUS_KEY.filter((k) => k.kind !== "unknown").map((k) => (
