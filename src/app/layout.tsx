@@ -30,6 +30,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               ICS-LAS <span className="hidden text-sm font-normal text-muted sm:inline">Resource Map</span>
             </Link>
             <Link href="/" className="py-2 text-sm font-medium">Map</Link>
+            <Link href="/black-book" className="py-2 text-sm font-medium">Black Book</Link>
             <Link href="/safety" className="py-2 text-sm font-medium">Safety</Link>
             {user ? (
               <>

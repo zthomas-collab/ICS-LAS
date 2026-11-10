@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { Driver, Tx } from "../db";
 import { runIn } from "../db/context";
-import { AppError } from "../errors";
+import { AppError, fromDbError } from "../errors";
 import { ORG_TYPES } from "@/lib/domain";
 import { appBaseUrl, enqueueEmail, hashToken, newToken, writeAudit } from "./shared";
 
@@ -22,6 +22,13 @@ export function assertDevAuthAllowed(): void {
   }
 }
 
+const serviceTypeCode = z.string().regex(/^[A-Z_]{2,40}$/, "Choose a service type");
+export const serviceTypeList = z.preprocess(
+  (v) => (v === undefined || v === "" ? [] : Array.isArray(v) ? v : [v]),
+  z.array(serviceTypeCode).max(15),
+);
+export const checkbox = z.preprocess((v) => v === true || v === "on" || v === "true", z.boolean());
+
 export const registrationSchema = z.object({
   displayName: z.string().trim().min(2).max(120),
   legalName: z.string().trim().min(2).max(200),
@@ -38,7 +45,19 @@ export const registrationSchema = z.object({
   publicPhone: z.string().trim().max(40).optional(),
   description: z.string().trim().max(2000).optional(),
   registrationNotes: z.string().trim().min(10, "Tell us how we can verify your organization").max(2000),
+  publicEmail: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .email()
+    .max(254)
+    .optional()
+    .or(z.literal("").transform(() => undefined)),
+  primaryServiceType: serviceTypeCode,
+  additionalServiceTypes: serviceTypeList,
+  directoryConsent: checkbox,
 });
+
 export type RegistrationInput = z.infer<typeof registrationSchema>;
 
 export function parseOrThrow<T extends z.ZodTypeAny>(schema: T, input: unknown): z.infer<T> {
@@ -72,12 +91,22 @@ async function issueToken(tx: Tx, userId: string, purpose: "EMAIL_CONFIRM" | "SI
 /** Module C: organization registration. Creates PENDING_EMAIL org + ORG_ADMIN membership; queues confirmation email. */
 export async function registerOrganization(driver: Driver, raw: unknown): Promise<{ orgId: string }> {
   const input = parseOrThrow(registrationSchema, raw);
+  try {
+    return await registerTx(driver, input);
+  } catch (err) {
+    throw fromDbError(err);
+  }
+}
+
+async function registerTx(driver: Driver, input: RegistrationInput): Promise<{ orgId: string }> {
   return runIn(driver, { kind: "system" }, async (tx) => {
     const user = await upsertUser(tx, input.email, input.contactName);
     const org = await tx.query<{ id: string }>(
       `INSERT INTO organizations (legal_name, display_name, org_type, contact_email, website, public_phone,
-                                  description, registration_notes, created_by)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
+                                  description, registration_notes, created_by, public_email, requested_service_type,
+                                  directory_consent_at, directory_consent_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11, CASE WHEN $12 THEN now() END, CASE WHEN $12 THEN $9::uuid END)
+       RETURNING id`,
       [
         input.legalName,
         input.displayName,
@@ -88,9 +117,17 @@ export async function registerOrganization(driver: Driver, raw: unknown): Promis
         input.description || null,
         input.registrationNotes,
         user.id,
+        input.publicEmail ?? null,
+        input.primaryServiceType,
+        input.directoryConsent,
       ],
     );
     const orgId = org[0].id;
+    const offered = Array.from(new Set([input.primaryServiceType, ...input.additionalServiceTypes]));
+    await tx.query(
+      `INSERT INTO organization_service_types (org_id, service_type) SELECT $1, unnest($2::text[])`,
+      [orgId, offered],
+    );
     await tx.query(
       `INSERT INTO organization_memberships (org_id, user_id, role, status) VALUES ($1, $2, 'ORG_ADMIN', 'INVITED')`,
       [orgId, user.id],

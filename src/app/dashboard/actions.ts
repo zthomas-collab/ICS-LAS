@@ -15,6 +15,9 @@ import {
   updateSite,
 } from "@/server/modules/sites";
 import { decideOrganization } from "@/server/modules/organizations";
+import { setPrimaryServiceType, updateOrganizationProfile } from "@/server/modules/directory";
+import { MAX_UPLOAD_BYTES, removeSiteImage, uploadSiteImage } from "@/server/modules/images";
+import { getObjectStore } from "@/server/storage";
 import { requireUser } from "@/server/session";
 import type { FormState } from "../auth/actions";
 
@@ -88,6 +91,60 @@ export async function resourceCommandAction(siteId: string, resourceId: string, 
   }
   revalidatePath(`/dashboard/sites/${siteId}`);
   return { ok: true, message: cmd === "confirm" ? "Confirmed." : cmd === "archive" ? "Archived." : "Updated." };
+}
+
+export async function setServiceTypeAction(_prev: FormState, form: FormData): Promise<FormState> {
+  const user = await requireUser();
+  try {
+    await setPrimaryServiceType(await getDriver(), user.id, fields(form));
+  } catch (err) {
+    return toState(err);
+  }
+  revalidatePath("/admin/organizations");
+  return { ok: true, message: "Service type updated." };
+}
+
+export async function updateProfileAction(orgId: string, _prev: FormState, form: FormData): Promise<FormState> {
+  const user = await requireUser();
+  try {
+    await updateOrganizationProfile(await getDriver(), user.id, orgId, {
+      ...fields(form),
+      additionalServiceTypes: form.getAll("additionalServiceTypes"),
+    });
+  } catch (err) {
+    return toState(err);
+  }
+  revalidatePath(`/dashboard/orgs/${orgId}/profile`);
+  revalidatePath("/black-book");
+  return { ok: true, message: "Profile saved." };
+}
+
+export async function uploadSiteImageAction(siteId: string, _prev: FormState, form: FormData): Promise<FormState> {
+  const user = await requireUser();
+  const file = form.get("image");
+  if (!(file instanceof File) || file.size === 0) return { error: "Choose a photo to upload.", fieldErrors: { image: ["Required"] } };
+  if (file.size > MAX_UPLOAD_BYTES) return { error: "Images must be 5 MB or smaller.", fieldErrors: { image: ["Too large"] } };
+  try {
+    await uploadSiteImage(await getDriver(), getObjectStore(), user.id, siteId, {
+      bytes: Buffer.from(await file.arrayBuffer()),
+      altText: form.get("altText"),
+    });
+  } catch (err) {
+    return toState(err);
+  }
+  revalidatePath(`/dashboard/sites/${siteId}`);
+  return { ok: true, message: "Photo saved. Location metadata was removed." };
+}
+
+export async function removeSiteImageAction(siteId: string): Promise<FormState> {
+  const user = await requireUser();
+  try {
+    await removeSiteImage(await getDriver(), user.id, siteId);
+  } catch (err) {
+    return toState(err);
+  }
+  revalidatePath(`/dashboard/sites/${siteId}`);
+  return { ok: true, message: "Photo removed." };
 }
 
 export async function decideOrganizationAction(_prev: FormState, form: FormData): Promise<FormState> {

@@ -22,7 +22,9 @@ const csp = [
 const nextConfig: NextConfig = {
   poweredByHeader: false,
   turbopack: { root: __dirname },
-  serverExternalPackages: ["@electric-sql/pglite", "@electric-sql/pglite-postgis", "pg"],
+  serverExternalPackages: ["@electric-sql/pglite", "@electric-sql/pglite-postgis", "pg", "sharp"],
+  // Site photos up to 5 MB plus multipart overhead.
+  experimental: { serverActions: { bodySizeLimit: "6mb" } },
   outputFileTracingIncludes: { "/**": ["./db/migrations/**"] },
   async headers() {
     return [

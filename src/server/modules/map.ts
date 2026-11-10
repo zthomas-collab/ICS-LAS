@@ -21,6 +21,10 @@ export const mapQuerySchema = z
       .string()
       .optional()
       .transform((v) => (v ? v.split(",").filter((c) => /^[A-Z_]{2,40}$/.test(c)).slice(0, 20) : [])),
+    services: z
+      .string()
+      .optional()
+      .transform((v) => (v ? v.split(",").filter((c) => /^[A-Z_]{2,40}$/.test(c)).slice(0, 20) : [])),
     confirmedOnly: z
       .enum(["true", "false", "1", "0"])
       .optional()
@@ -43,6 +47,8 @@ export type MapSite = {
   visibility: Visibility; addressLine: string | null; city: string | null; county: string | null; state: string | null;
   postalCode: string | null; hoursText: string | null; publicPhone: string | null; lastConfirmedAt: string | null;
   updatedAt: string; isSynthetic: boolean; resources: MapResource[];
+  serviceType: string | null; serviceLabel: string | null; serviceShort: string | null; serviceColor: string | null;
+  imageId: string | null; imageAlt: string | null;
 };
 
 export type MapResult = { asOf: string; truncated: boolean; scope: "public" | "authenticated"; sites: MapSite[] };
@@ -77,6 +83,9 @@ function toSite(r: Record<string, unknown>, resources: MapResource[]): MapSite {
     postalCode: r.postal_code as string | null, hoursText: r.hours_text as string | null,
     publicPhone: r.public_phone as string | null, lastConfirmedAt: iso(r.last_confirmed_at),
     updatedAt: iso(r.updated_at) ?? "", isSynthetic: Boolean(r.is_synthetic), resources,
+    serviceType: (r.service_type as string | null) ?? null, serviceLabel: (r.service_label as string | null) ?? null,
+    serviceShort: (r.service_short as string | null) ?? null, serviceColor: (r.service_color as string | null) ?? null,
+    imageId: (r.image_id as string | null) ?? null, imageAlt: (r.image_alt as string | null) ?? null,
   };
 }
 
@@ -99,11 +108,13 @@ function finish(rows: Record<string, unknown>[], resRows: Record<string, unknown
 async function publicQuery(tx: Tx, q: MapQuery): Promise<MapResult> {
   const rows = await tx.query<Record<string, unknown>>(
     `SELECT id, org_id, org_name, name, description, lat, lng, address_line, city, county, state, postal_code,
-            hours_text, public_phone, last_confirmed_at, updated_at, is_synthetic
+            hours_text, public_phone, last_confirmed_at, updated_at, is_synthetic,
+            service_type, service_label, service_short, service_color, image_id, image_alt
        FROM public_sites
       WHERE location::geometry && ST_MakeEnvelope($1, $2, $3, $4, 4326)
+        AND (cardinality($6::text[]) = 0 OR service_type = ANY($6::text[]))
       ORDER BY updated_at DESC LIMIT $5`,
-    [q.w, q.s, q.e, q.n, q.limit],
+    [q.w, q.s, q.e, q.n, q.limit, q.services],
   );
   if (!rows.length) return finish([], [], q, q.limit, "public");
   const res = await tx.query<Record<string, unknown>>(
@@ -126,11 +137,17 @@ async function viewerQuery(tx: Tx, q: MapQuery): Promise<MapResult> {
     `SELECT s.id, s.org_id, o.display_name AS org_name, s.name, s.description, s.visibility::text AS visibility,
             ST_Y(s.location::geometry) AS lat, ST_X(s.location::geometry) AS lng, s.address_line, s.city, s.county,
             s.state, s.postal_code, s.hours_text, s.public_phone, s.last_confirmed_at, s.updated_at,
-            (s.is_synthetic OR o.is_synthetic) AS is_synthetic
-       FROM staging_sites s JOIN organizations o ON o.id = s.org_id
+            (s.is_synthetic OR o.is_synthetic) AS is_synthetic,
+            o.primary_service_type AS service_type, st.label AS service_label, st.short_label AS service_short,
+            st.color AS service_color, img.id AS image_id, img.alt_text AS image_alt
+       FROM staging_sites s
+       JOIN organizations o ON o.id = s.org_id
+       LEFT JOIN service_types st ON st.code = o.primary_service_type
+       LEFT JOIN site_images img ON img.site_id = s.id AND img.status = 'ACTIVE' AND img.scan_status IN ('NOT_SCANNED','CLEAN')
       WHERE s.id = ANY($1::uuid[]) AND s.status = 'ACTIVE'
+        AND (cardinality($2::text[]) = 0 OR o.primary_service_type = ANY($2::text[]))
       ORDER BY s.updated_at DESC`,
-    [ids],
+    [ids, q.services],
   );
   const res = await tx.query<Record<string, unknown>>(
     `SELECT r.id, r.site_id, r.category_code, c.label AS category_label, r.name, r.visibility::text AS visibility,

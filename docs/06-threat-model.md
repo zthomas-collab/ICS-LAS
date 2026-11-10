@@ -17,6 +17,8 @@ Assets: restricted site coordinates and inventory; org accounts and editing righ
 | T11 | Scraping / DoS | Bulk viewport queries | Per-IP/user fixed-window rate limits; bbox span cap (12°); result cap (1000) | Shared limiter (Redis/WAF), bot detection at edge |
 | T12 | Location privacy of visitors | "Near me" | Geolocation only client-side; server receives viewport only; IPs not logged | Privacy policy |
 | T13 | Unsafe reliance on road reports | Treating reports as official | Separate `official_status` with DB CHECK requiring source + verifier | Phase 5 UI labels and tests |
-| T14 | Malware via photos | Uploads | Not implemented (no upload surface exists) | Private bucket, AV scan, EXIF strip (Phase 5) |
+| T14 | Malicious or privacy-leaking site photos | Uploads | Bytes sniffed (JPEG/PNG/WebP only, never trusting filename/MIME); decoded and **re-encoded to WebP** with sharp (drops EXIF/GPS/XMP/ICC, neutralizes polyglots); pixel limit 40 MP; 5 MB cap; served only through an authorization-checked route with `nosniff`; restricted-site photos `private, no-store`; storage keys never sent to clients | AV scanning not configured (rows `NOT_SCANNED`); managed private object storage (M5); retention job for archived photos; moderation queue |
+| T17 | Black Book scraping / harassment of contacts | Public directory | Only orgs that opted in; only public channels; consent withdrawal is immediate; 200-row cap | Edge rate limiting / bot protection for `/black-book` |
+| T18 | Wrong or abusive service type on the map | Org self-labels | Main type is admin-confirmed at approval and only admins can change it (audited) | — |
 | T15 | Dev auth or PGlite in production | Misconfiguration | Both throw when `NODE_ENV=production` unless explicitly overridden | Deployment checklist gate |
 | T16 | Log leakage | PII/tokens in logs | Structured error logs contain message only; tokens never logged | Central log redaction tests |

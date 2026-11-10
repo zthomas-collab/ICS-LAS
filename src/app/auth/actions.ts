@@ -32,7 +32,10 @@ export async function registerAction(_prev: FormState, form: FormData): Promise<
   const blocked = await limited("register", 5);
   if (blocked) return blocked;
   try {
-    await registerOrganization(await getDriver(), Object.fromEntries(form.entries()));
+    await registerOrganization(await getDriver(), {
+      ...Object.fromEntries(form.entries()),
+      additionalServiceTypes: form.getAll("additionalServiceTypes"),
+    });
     return { ok: true, message: "Check your email for a confirmation link. Your organization will then be reviewed." };
   } catch (err) {
     return toState(err);

@@ -12,8 +12,11 @@ First vertical slice (Phases 0–2 + part of 3):
 - ✅ Staging site and resource CRUD with four visibility levels, one-tap availability updates, corrections, append-only history and audit log
 - ✅ Visibility enforced in PostgreSQL (roles, RLS, public read-model views, triggers) and in services
 - ✅ Public MapLibre map with clustering, filters, text search, "near me", list view, stale-data banner, freshness ("Unconfirmed" after the category interval)
-- ✅ 51 automated tests against real PostgreSQL 18 + PostGIS 3.6 (PGlite)
-- ⏳ Road reports, Black Book, dashboards, notification worker, managed auth/MFA — see [milestones](docs/05-milestones-acceptance.md)
+- ✅ Account service types (supplies, water, food, shelter, FEMA/disaster case management, healthcare, …) — admin-confirmed at approval — drive marker colors, short codes and a filterable **map legend**
+- ✅ One photo per location (re-encoded, GPS/EXIF stripped), shown to exactly the people who can see the location
+- ✅ Public **Black Book** at `/black-book`: approved organizations that opted in, with call/email/website — no sign-in
+- ✅ 64 automated tests against real PostgreSQL 18 + PostGIS 3.6 (PGlite)
+- ⏳ Road reports, restricted Black Book contacts, dashboards, notification worker, managed auth/MFA — see [milestones](docs/05-milestones-acceptance.md)
 
 **Not production-ready.** Authentication is a development adapter, no email leaves the machine, and the basemap is a free no-SLA provider. See [assumptions & risks](docs/01-assumptions-risks.md).
 

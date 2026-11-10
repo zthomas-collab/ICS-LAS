@@ -6,6 +6,8 @@ import { listOrgSites } from "@/server/modules/sites";
 import { requireUser } from "@/server/session";
 import { ORG_TYPE_LABELS, type OrgType } from "@/lib/domain";
 import { SyntheticBadge, Timestamp, VisibilityBadge } from "@/components/status";
+import { ServiceBadge } from "@/components/service-forms";
+import { listServiceTypes } from "@/server/modules/directory";
 
 export const metadata: Metadata = { title: "Organization dashboard", robots: { index: false } };
 export const dynamic = "force-dynamic";
@@ -21,7 +23,7 @@ const STATUS_TEXT: Record<string, string> = {
 export default async function DashboardPage() {
   const user = await requireUser();
   const db = await getDriver();
-  const orgs = await listMyOrganizations(db, user.id);
+  const [orgs, serviceTypes] = await Promise.all([listMyOrganizations(db, user.id), listServiceTypes(db)]);
   const sitesByOrg = await Promise.all(orgs.map((o) => (o.status === "APPROVED" ? listOrgSites(db, user.id, o.id) : Promise.resolve([]))));
 
   return (
@@ -48,6 +50,12 @@ export default async function DashboardPage() {
               <span className={`badge ${o.status === "APPROVED" ? "tone-ok" : o.status === "PENDING_VERIFICATION" ? "tone-warn" : "tone-bad"}`}>{o.status.replace("_", " ")}</span>
               <span className="badge tone-muted">Your role: {o.role.replace("_", " ")}</span>
               <SyntheticBadge show={o.isSynthetic} />
+              {serviceTypes.find((t) => t.code === o.primaryServiceType) && (
+                <ServiceBadge type={serviceTypes.find((t) => t.code === o.primaryServiceType)!} />
+              )}
+              {o.role === "ORG_ADMIN" && o.membershipStatus === "ACTIVE" && (
+                <Link className="ml-auto text-sm text-brand underline" href={`/dashboard/orgs/${o.id}/profile`}>Organization profile &amp; Black Book</Link>
+              )}
             </div>
             <p className="mt-2 text-sm text-muted">{STATUS_TEXT[o.status]}</p>
             {o.status === "APPROVED" && (

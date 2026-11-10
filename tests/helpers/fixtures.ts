@@ -15,14 +15,17 @@ export async function makeUser(db: Driver, email: string): Promise<string> {
 
 export async function makeOrg(
   db: Driver,
-  opts: { name: string; status?: string; members?: { userId: string; role: "ORG_ADMIN" | "EDITOR" | "VIEWER"; status?: string }[] },
+  opts: { name: string; status?: string; serviceType?: string; consent?: boolean; members?: { userId: string; role: "ORG_ADMIN" | "EDITOR" | "VIEWER"; status?: string }[] },
 ): Promise<string> {
   return runIn(db, { kind: "system" }, async (tx) => {
     const o = await tx.query<{ id: string }>(
-      `INSERT INTO organizations (legal_name, display_name, org_type, status, contact_email, is_synthetic, approved_at)
+      `INSERT INTO organizations (legal_name, display_name, org_type, status, contact_email, is_synthetic, approved_at,
+                                  primary_service_type, public_phone, public_email, directory_consent_at)
        VALUES ($1, $1, 'NONPROFIT', $2::org_status, 'private-contact@example.test', true,
-               CASE WHEN $2 = 'APPROVED' THEN now() END) RETURNING id`,
-      [`[TEST] ${opts.name}`, opts.status ?? "APPROVED"],
+               CASE WHEN $2 = 'APPROVED' THEN now() END,
+               CASE WHEN $2 IN ('APPROVED','SUSPENDED') THEN $3 END, '(555) 010-0000', 'public@example.test',
+               CASE WHEN $4 THEN now() END) RETURNING id`,
+      [`[TEST] ${opts.name}`, opts.status ?? "APPROVED", opts.serviceType ?? "FOOD", opts.consent ?? false],
     );
     for (const m of opts.members ?? []) {
       await tx.query(

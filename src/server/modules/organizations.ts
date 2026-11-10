@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { Driver, Tx } from "../db";
 import { runIn } from "../db/context";
-import { AppError } from "../errors";
+import { AppError, fromDbError } from "../errors";
 import { parseOrThrow } from "./identity";
 import { enqueueEmail, writeAudit } from "./shared";
 
@@ -34,16 +34,17 @@ export type MyOrganization = {
   membershipStatus: string;
   publicationSuspended: boolean;
   isSynthetic: boolean;
+  primaryServiceType: string | null;
 };
 
 export async function listMyOrganizations(driver: Driver, userId: string): Promise<MyOrganization[]> {
   return runIn(driver, { kind: "viewer", userId }, async (tx) => {
     const rows = await tx.query<{
       id: string; display_name: string; org_type: string; status: string; role: string;
-      mstatus: string; publication_suspended: boolean; is_synthetic: boolean;
+      mstatus: string; publication_suspended: boolean; is_synthetic: boolean; primary_service_type: string | null;
     }>(
       `SELECT o.id, o.display_name, o.org_type::text, o.status::text, m.role::text, m.status::text AS mstatus,
-              o.publication_suspended, o.is_synthetic
+              o.publication_suspended, o.is_synthetic, o.primary_service_type
          FROM organization_memberships m JOIN organizations o ON o.id = m.org_id
         WHERE m.user_id = ics.viewer_id() AND m.status <> 'REVOKED'
         ORDER BY o.display_name`,
@@ -51,6 +52,7 @@ export async function listMyOrganizations(driver: Driver, userId: string): Promi
     return rows.map((r) => ({
       id: r.id, displayName: r.display_name, orgType: r.org_type, status: r.status, role: r.role,
       membershipStatus: r.mstatus, publicationSuspended: r.publication_suspended, isSynthetic: r.is_synthetic,
+      primaryServiceType: r.primary_service_type,
     }));
   });
 }
@@ -69,6 +71,9 @@ export type PendingOrganization = {
   createdAt: Date;
   sopDueAt: Date | null;
   publicationSuspended: boolean;
+  requestedServiceType: string | null;
+  primaryServiceType: string | null;
+  offeredServiceTypes: string[];
 };
 
 export async function listOrganizationsForReview(driver: Driver, adminUserId: string): Promise<PendingOrganization[]> {
@@ -77,6 +82,8 @@ export async function listOrganizationsForReview(driver: Driver, adminUserId: st
     const rows = await tx.query<Record<string, unknown>>(
       `SELECT o.id, o.legal_name, o.display_name, o.org_type::text, o.status::text, o.contact_email, o.website,
               o.public_phone, o.description, o.registration_notes, o.created_at, o.publication_suspended,
+              o.requested_service_type, o.primary_service_type,
+              coalesce((SELECT array_agg(service_type) FROM organization_service_types WHERE org_id = o.id), '{}') AS offered,
               (SELECT min(due_at) FROM sop_executions e WHERE e.subject_id = o.id AND e.sop_code = 'SOP-001' AND e.status = 'OPEN') AS sop_due_at
          FROM organizations o
         WHERE o.status IN ('PENDING_VERIFICATION','APPROVED','SUSPENDED')
@@ -90,15 +97,28 @@ export async function listOrganizationsForReview(driver: Driver, adminUserId: st
       description: r.description as string | null, registrationNotes: r.registration_notes as string | null,
       createdAt: r.created_at as Date, sopDueAt: r.sop_due_at as Date | null,
       publicationSuspended: r.publication_suspended as boolean,
+      requestedServiceType: r.requested_service_type as string | null,
+      primaryServiceType: r.primary_service_type as string | null,
+      offeredServiceTypes: r.offered as string[],
     }));
   });
 }
 
-export const decisionSchema = z.object({
-  orgId: z.string().uuid(),
-  decision: z.enum(["APPROVED", "REJECTED", "SUSPENDED", "REINSTATED"]),
-  evidenceSummary: z.string().trim().min(5, "Record the evidence or reason for this decision").max(4000),
-});
+export const decisionSchema = z
+  .object({
+    orgId: z.string().uuid(),
+    decision: z.enum(["APPROVED", "REJECTED", "SUSPENDED", "REINSTATED"]),
+    evidenceSummary: z.string().trim().min(5, "Record the evidence or reason for this decision").max(4000),
+    primaryServiceType: z
+      .string()
+      .regex(/^[A-Z_]{2,40}$/)
+      .optional()
+      .or(z.literal("").transform(() => undefined)),
+  })
+  .refine((d) => d.decision !== "APPROVED" || Boolean(d.primaryServiceType), {
+    message: "Choose the account's service type before approving",
+    path: ["primaryServiceType"],
+  });
 
 const TRANSITIONS: Record<string, { from: string[]; to: string }> = {
   APPROVED: { from: ["PENDING_VERIFICATION"], to: "APPROVED" },
@@ -110,6 +130,14 @@ const TRANSITIONS: Record<string, { from: string[]; to: string }> = {
 /** SOP-001 / SOP-012: platform admin verification decision. Suspension unpublishes immediately (read models filter on status). */
 export async function decideOrganization(driver: Driver, adminUserId: string, raw: unknown): Promise<void> {
   const input = parseOrThrow(decisionSchema, raw);
+  try {
+    await decideTx(driver, adminUserId, input);
+  } catch (err) {
+    throw fromDbError(err);
+  }
+}
+
+async function decideTx(driver: Driver, adminUserId: string, input: z.infer<typeof decisionSchema>): Promise<void> {
   await runIn(driver, { kind: "system" }, async (tx) => {
     await assertPlatformAdmin(tx, adminUserId);
     const t = TRANSITIONS[input.decision];
@@ -117,10 +145,12 @@ export async function decideOrganization(driver: Driver, adminUserId: string, ra
       `UPDATE organizations
           SET status = $2::org_status,
               approved_at = CASE WHEN $2 = 'APPROVED' THEN coalesce(approved_at, now()) ELSE approved_at END,
-              suspended_at = CASE WHEN $2 = 'SUSPENDED' THEN now() WHEN $2 = 'APPROVED' THEN NULL ELSE suspended_at END
+              suspended_at = CASE WHEN $2 = 'SUSPENDED' THEN now() WHEN $2 = 'APPROVED' THEN NULL ELSE suspended_at END,
+              primary_service_type = CASE WHEN $5 THEN $4::text ELSE primary_service_type END
         WHERE id = $1 AND status::text = ANY($3::text[])
         RETURNING id, display_name, contact_email`,
-      [input.orgId, t.to, t.from],
+      // Only a first approval sets the type; reinstatement keeps the confirmed type.
+      [input.orgId, t.to, t.from, input.primaryServiceType ?? null, input.decision === "APPROVED"],
     );
     if (!rows.length) throw new AppError("CONFLICT", "The organization is not in a state that allows this decision.");
     await tx.query(
@@ -141,7 +171,10 @@ export async function decideOrganization(driver: Driver, adminUserId: string, ra
       action: `ORG_${input.decision}`,
       subjectType: "organization",
       subjectId: input.orgId,
-      details: { evidenceLength: input.evidenceSummary.length },
+      details: {
+        evidenceLength: input.evidenceSummary.length,
+        ...(input.decision === "APPROVED" ? { primaryServiceType: input.primaryServiceType } : {}),
+      },
     });
     const messages: Record<string, string> = {
       APPROVED: "has been verified. You can now publish staging sites and resources.",

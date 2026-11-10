@@ -7,7 +7,8 @@ import { getSiteDetail, listCategories } from "@/server/modules/sites";
 import { requireUser } from "@/server/session";
 import { AvailabilityBadge, SyntheticBadge, Timestamp, VisibilityBadge } from "@/components/status";
 import { CommandButton, NewResourceForm, ResourceQuickActions, SiteForm } from "@/components/site-forms";
-import { createResourceAction, resourceCommandAction, siteCommandAction, updateSiteAction } from "@/app/dashboard/actions";
+import { createResourceAction, removeSiteImageAction, resourceCommandAction, siteCommandAction, updateSiteAction, uploadSiteImageAction } from "@/app/dashboard/actions";
+import { PhotoForm } from "@/components/service-forms";
 
 export const metadata: Metadata = { title: "Staging site", robots: { index: false } };
 export const dynamic = "force-dynamic";
@@ -49,6 +50,24 @@ export default async function SitePage({ params, searchParams }: { params: Promi
         <Timestamp value={site.updatedAt} prefix="Updated" />
       </div>
       {!site.canEdit && <p className="mt-3 rounded-md bg-warn-bg p-3 text-sm text-warn">Read-only: your role does not allow editing.</p>}
+
+      <section className="mt-6" aria-labelledby="photo-h">
+        <h2 id="photo-h" className="text-xl font-semibold">Location photo</h2>
+        <p className="text-sm text-muted">Shown on the map with this site, to the same people who can see the site.</p>
+        <div className="mt-3 grid gap-4 sm:grid-cols-2">
+          {site.imageId ? (
+            // eslint-disable-next-line @next/next/no-img-element -- authorized image route, not a static asset
+            <img src={`/api/sites/${site.id}/image?v=${site.imageId}`} alt={site.imageAlt ?? ""} className="w-full rounded-lg border border-line object-cover" />
+          ) : (
+            <div className="flex min-h-32 items-center justify-center rounded-lg border border-dashed border-line text-sm text-muted">No photo yet</div>
+          )}
+          {editable && (
+            <div className="card p-4">
+              <PhotoForm uploadAction={uploadSiteImageAction.bind(null, site.id)} removeAction={removeSiteImageAction.bind(null, site.id)} hasPhoto={Boolean(site.imageId)} />
+            </div>
+          )}
+        </div>
+      </section>
 
       <section className="mt-6" aria-labelledby="resources-h">
         <h2 id="resources-h" className="text-xl font-semibold">Resources ({active.length})</h2>

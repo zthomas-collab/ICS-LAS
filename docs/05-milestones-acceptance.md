@@ -23,14 +23,16 @@
 | 4 | Restricted location never returned by anonymous APIs | `› anonymous visitors see only PUBLIC`, `› anonymous DB role cannot read base tables`, `› search suggestions respect visibility`, payload string checks | ✅ |
 | 5 | Expired resource does not display confirmed availability | `freshness-spatial.test.ts › … become EXPIRED and drop out of confirmed-only filters`; `domain.test.ts › never shows Available when expired` | ✅ |
 | 6 | Road observation never becomes official closure without agency authority | DB CHECK constraint on `road_incidents` (official status requires source ref + verifier) — **tests ship with Phase 5** | 🟡 |
-| 7 | Users view permitted Black Book contacts and initiate contact | Phase 4 (tel:/directions helpers tested in `domain.test.ts`) | ⏳ |
-| 8 | Restricted contact details never in public payloads | Org `contact_email` not granted + payload check test; Black Book in Phase 4 | 🟡 |
+| 7 | Users view permitted Black Book contacts and initiate contact | Public Black Book live with Call/Email/Website (`blackbook-types-images.test.ts`, browser check); restricted contacts for authorized users ship in Phase 4 | 🟡 |
+| 8 | Restricted contact details never in public payloads | `› exposes only public channels — never the private contact email`; org `contact_email` not granted to request roles | ✅ for org accounts; Phase 4 for `directory_contacts` |
 | 9 | All material changes timestamped and auditable | `› availability updates are append-only events…` (DELETE rejected), audit rows for site/org actions | ✅ |
 | 10 | Functional on mobile viewports and degraded networks | Manual: 375 px no horizontal overflow on `/`, `/register`, site page; stale-data banner logic. Automated a11y/perf runs pending (Phase 7) | 🟡 |
 | 11 | Every visible UI action has real behavior | Unbuilt modules are not linked in navigation | ✅ (manual review) |
 | 12 | Demo data labelled synthetic | `is_synthetic` columns; `[SYNTHETIC]` names; **SYNTHETIC DEMO** badges in UI | ✅ |
 
-## Test inventory (51 tests, all passing at time of writing)
+## Test inventory (64 tests, all passing at time of writing)
+
+- `tests/blackbook-types-images.test.ts` — Black Book consent/visibility/no private fields, filters, ORG_ADMIN-only edits; approved-needs-type constraint, legend data on pins, admin-only type change; image sniffing, EXIF/GPS stripping + orientation, photo visibility per site rule, cross-org upload blocked, replace/remove history, suspension hides photos.
 
 - `tests/migrations.test.ts` — migrations apply on PostgreSQL 18 + PostGIS 3.6 and are idempotent.
 - `tests/visibility.test.ts` — full visibility matrix, RLS raw-SQL bypass attempts, revoked access, suspension, resource vs site visibility, history immutability.

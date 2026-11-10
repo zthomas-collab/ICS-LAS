@@ -243,6 +243,7 @@ export type SiteDetail = SiteSummary & {
   orgId: string; description: string | null; lat: number; lng: number; addressLine: string | null;
   county: string | null; postalCode: string | null; hoursText: string | null; publicPhone: string | null;
   canEdit: boolean; resources: ResourceDetail[]; events: SiteEvent[];
+  imageId: string | null; imageAlt: string | null;
 };
 
 export async function getSiteDetail(driver: Driver, userId: string, siteId: string): Promise<SiteDetail> {
@@ -262,6 +263,10 @@ export async function getSiteDetail(driver: Driver, userId: string, siteId: stri
           WHERE r.site_id = $1 ORDER BY r.status, c.sort_order, r.name`,
         [siteId],
       );
+      const image = await tx.query<{ id: string; alt_text: string }>(
+        `SELECT id, alt_text FROM site_images WHERE site_id = $1 AND status = 'ACTIVE'`,
+        [siteId],
+      );
       const events = await tx.query<Record<string, unknown>>(
         `SELECT e.id, e.event_type, e.created_at, e.note, r.name AS resource_name
            FROM resource_update_events e LEFT JOIN resources r ON r.id = e.resource_id
@@ -274,6 +279,7 @@ export async function getSiteDetail(driver: Driver, userId: string, siteId: stri
         resourceCount: resources.filter((r) => r.status === "ACTIVE").length,
         description: s.description, lat: s.lat, lng: s.lng, addressLine: s.address_line, county: s.county,
         postalCode: s.postal_code, hoursText: s.hours_text, publicPhone: s.public_phone, canEdit: member[0].edit,
+        imageId: image[0]?.id ?? null, imageAlt: image[0]?.alt_text ?? null,
         resources: resources.map((r) => ({
           id: r.id as string, categoryCode: r.category_code as string, categoryLabel: r.label as string, name: r.name as string,
           description: r.description as string | null, visibility: r.visibility as Visibility, status: r.status as string,

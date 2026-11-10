@@ -9,7 +9,7 @@ npm install
 npm run db:seed                 # creates .data/pglite, applies migrations, loads [SYNTHETIC] data
 npm run admin:grant -- you@example.test PLATFORM_ADMIN "local bootstrap"
 npm run dev                     # http://localhost:3000 ; emails appear at /dev/outbox
-npm run check                   # lint + typecheck + 51 tests (in-memory PostGIS)
+npm run check                   # lint + typecheck + tests (in-memory PostGIS)
 ```
 PGlite is single-process: stop `npm run dev` before running `db:*`/`admin:*` scripts. Reset local data by deleting `.data/`.
 
@@ -24,6 +24,7 @@ PGlite is single-process: stop `npm run dev` before running `db:*`/`admin:*` scr
 | `NEXT_PUBLIC_MAP_STYLE_URL` | ✅ | Licensed basemap style URL |
 | `MAP_TILE_ORIGINS` | ✅ | Space-separated origins added to CSP `img-src`/`connect-src` |
 | `NEXT_PUBLIC_DEFAULT_VIEW` | — | `lng,lat,zoom` initial map view |
+| `UPLOADS_DIR` | — | Local photo storage directory (dev only; production needs managed object storage) |
 | `REQUIRE_MFA_FOR_PRIVILEGED` | — | Forced `true` in production |
 | `AUTH_PROVIDER` | ✅ | Must point to the managed provider; the dev adapter refuses to run in production |
 

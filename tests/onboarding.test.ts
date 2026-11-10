@@ -40,6 +40,10 @@ const registration = {
   email: "rep@example.test",
   website: "https://example.test",
   registrationNotes: "501(c)(3) determination letter available; state registration 12345.",
+  primaryServiceType: "FOOD",
+  additionalServiceTypes: ["WATER"],
+  directoryConsent: "on",
+  publicPhone: "(555) 010-0199",
 };
 
 beforeAll(async () => {
@@ -83,15 +87,16 @@ describe("organization onboarding (SOP-001)", () => {
   it("a pending org cannot publish and its rep is not an admin", async () => {
     await expect(createSite(db, repId, orgId, site())).rejects.toMatchObject({ code: "FORBIDDEN" });
     await expect(listOrganizationsForReview(db, repId)).rejects.toMatchObject({ code: "FORBIDDEN" });
-    await expect(decideOrganization(db, repId, { orgId, decision: "APPROVED", evidenceSummary: "self-approval attempt" })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(decideOrganization(db, repId, { orgId, decision: "APPROVED", evidenceSummary: "self-approval attempt", primaryServiceType: "FOOD" })).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 
   it("a platform admin approves with recorded evidence; SOP-001 completes", async () => {
     const queue = await listOrganizationsForReview(db, adminId);
     expect(queue.map((o) => o.id)).toContain(orgId);
     await expect(decideOrganization(db, adminId, { orgId, decision: "APPROVED", evidenceSummary: "" })).rejects.toMatchObject({ code: "VALIDATION" });
-    await decideOrganization(db, adminId, { orgId, decision: "APPROVED", evidenceSummary: "Verified IRS determination letter and state registry." });
-    await expect(decideOrganization(db, adminId, { orgId, decision: "APPROVED", evidenceSummary: "double approve" })).rejects.toMatchObject({ code: "CONFLICT" });
+    await expect(decideOrganization(db, adminId, { orgId, decision: "APPROVED", evidenceSummary: "No type chosen" })).rejects.toMatchObject({ code: "VALIDATION" });
+    await decideOrganization(db, adminId, { orgId, decision: "APPROVED", evidenceSummary: "Verified IRS determination letter and state registry.", primaryServiceType: "FOOD" });
+    await expect(decideOrganization(db, adminId, { orgId, decision: "APPROVED", evidenceSummary: "double approve", primaryServiceType: "FOOD" })).rejects.toMatchObject({ code: "CONFLICT" });
     const rows = await runIn(db, { kind: "system" }, (tx) =>
       tx.query<{ status: string; v: number; sop: string }>(
         `SELECT o.status::text, (SELECT count(*)::int FROM organization_verifications WHERE org_id = o.id) AS v,

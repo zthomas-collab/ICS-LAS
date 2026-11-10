@@ -19,7 +19,7 @@
 | M2 | Licensed map tile provider + key (e.g. MapTiler, Stadia, Protomaps self-hosted) | `NEXT_PUBLIC_MAP_STYLE_URL`; defaults to MapLibre demo tiles (low detail, labelled "not for production") | Phase 2 launch |
 | M3 | Geocoding provider + terms allowing storage | Search matches stored city/ZIP/county/address text only | Phase 2 launch |
 | M4 | Transactional email provider (SES/Postmark/Resend) + verified sending domain | `notification_jobs` rows + dev outbox page; no email leaves the machine | Phase 1 launch |
-| M5 | Private object storage + malware scanning service | Not implemented (photos are Phase 5) | Phase 5 |
+| M5 | Private object storage + malware scanning service | Site photos stored on local disk (`.data/uploads`, dev only; refuses to run in production) and re-encoded, but **not virus-scanned** | Before photos are enabled in production |
 | M6 | Production PostgreSQL/PostGIS instance, backups, PITR | PGlite (PostgreSQL 18 + PostGIS 3.6 in WASM) for local dev/tests; `DATABASE_URL` switches to real Postgres | Phase 7 |
 | M7 | Approved government/agency road feeds (state DOT 511, NWS) and their terms | None — `official_status` can only be set manually by authorized verifier | Phase 5 |
 | M8 | Legal review: terms of use, privacy policy, contact consent language, liability disclaimer | Placeholder safety page copy | Before public launch |
