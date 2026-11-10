@@ -41,6 +41,7 @@ Open http://localhost:3000. Optional: load ZIP centroids for Contacts radius sea
 | [04-journeys-sitemap](docs/04-journeys-sitemap.md) | User journeys, sitemap |
 | [05-milestones-acceptance](docs/05-milestones-acceptance.md) | Phases, acceptance evidence, measured performance |
 | [06-threat-model](docs/06-threat-model.md) | Threats and controls |
+| [07-systems-audit](docs/07-systems-audit.md) | Readiness audit: public help-finding and nonprofit onboarding |
 | [adr/](docs/adr/README.md) | Architecture decisions |
 | [sop/SOPs](docs/sop/SOPs.md) | Administrator procedures |
 | [runbook](docs/runbook.md) | Config, deploy, rollback, backup/restore |
