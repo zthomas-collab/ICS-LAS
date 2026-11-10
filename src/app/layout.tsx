@@ -3,14 +3,19 @@ import Link from "next/link";
 import "./globals.css";
 import { getCurrentUser } from "@/server/session";
 import { signOutAction } from "./auth/actions";
+import { HopeGridMark } from "@/components/brand";
 
 export const metadata: Metadata = {
-  title: { default: "ICS-LAS · Resource Map", template: "%s · ICS-LAS" },
-  description: "Find disaster recovery resources, who runs them, and when they were last confirmed.",
+  title: { default: "HopeGrid — Help Is Closer Than You Think", template: "%s · HopeGrid" },
+  description:
+    "HopeGrid shows where disaster-recovery help is available near you, who provides it, and when it was last confirmed.",
   manifest: "/manifest.webmanifest",
+  applicationName: "HopeGrid",
 };
 
-export const viewport: Viewport = { width: "device-width", initialScale: 1, themeColor: "#0f4c5c" };
+export const viewport: Viewport = { width: "device-width", initialScale: 1, themeColor: "#205C4B" };
+
+const navLink = "rounded-md px-2 py-2 text-sm font-semibold text-white hover:bg-white/10";
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const user = await getCurrentUser();
@@ -22,35 +27,40 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           Skip to content
         </a>
         <aside aria-label="Emergency information" className="bg-bad-bg px-4 py-1.5 text-center text-sm text-bad">
-          <strong>Life-threatening emergency? Call 911.</strong> This site lists resources; it does not dispatch help.
+          <strong>Life-threatening emergency? Call 911.</strong> HopeGrid lists resources; it does not dispatch help.
         </aside>
-        <header className="border-b border-line bg-surface">
-          <nav aria-label="Main" className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2">
-            <Link href="/" className="mr-auto text-lg font-bold text-brand">
-              ICS-LAS <span className="hidden text-sm font-normal text-muted sm:inline">Resource Map</span>
+        <header className="bg-brand text-white">
+          <nav aria-label="Main" className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-1 gap-y-1 px-4 py-2">
+            <Link href="/" className="mr-auto flex items-center gap-2 py-1 text-xl font-extrabold tracking-tight text-white" aria-label="HopeGrid home">
+              <HopeGridMark />
+              <span>Hope<span className="text-mint">Grid</span></span>
             </Link>
-            <Link href="/" className="py-2 text-sm font-medium">Map</Link>
-            <Link href="/contacts" className="py-2 text-sm font-medium">Contacts</Link>
-            <Link href="/safety" className="py-2 text-sm font-medium">Safety</Link>
+            <Link href="/" className={navLink}>Map</Link>
+            <Link href="/contacts" className={navLink}>Contacts</Link>
+            <Link href="/safety" className={navLink}>Safety</Link>
             {user ? (
               <>
-                <Link href="/dashboard" className="py-2 text-sm font-medium">Dashboard</Link>
-                {isAdmin && <Link href="/admin/organizations" className="py-2 text-sm font-medium">Admin</Link>}
+                <Link href="/dashboard" className={navLink}>Dashboard</Link>
+                {isAdmin && <Link href="/admin/organizations" className={navLink}>Admin</Link>}
                 <form action={signOutAction}>
-                  <button className="py-2 text-sm font-medium text-muted underline">Sign out</button>
+                  <button className={`${navLink} underline`}>Sign out</button>
                 </form>
               </>
             ) : (
               <>
-                <Link href="/signin" className="py-2 text-sm font-medium">For organizations: sign in / register</Link>
+                <Link href="/signin" className={navLink}>Sign in</Link>
+                <Link href="/signin?tab=register" className="btn btn-attention ml-1 min-h-10 px-3 py-1.5 text-sm">
+                  Register Your Organization
+                </Link>
               </>
             )}
           </nav>
         </header>
         <main id="main" className="flex flex-1 flex-col">{children}</main>
         <footer className="border-t border-line bg-surface px-4 py-3 text-center text-xs text-muted">
-          Information is provided by participating organizations. Always check timestamps. Road and resource
-          reports are not official government notices. <Link className="underline" href="/safety">Safety &amp; corrections</Link>
+          <strong className="text-ink">HopeGrid</strong> is operated by Hiraeth Ventures. Information is provided by
+          participating organizations — always check timestamps. Road and resource reports are not official government
+          notices. <Link className="text-brand underline" href="/safety">Safety &amp; corrections</Link>
         </footer>
       </body>
     </html>

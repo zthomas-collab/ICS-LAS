@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { freshDb } from "./helpers/db";
 import { runIn } from "@/server/db/context";
-import { directionsUrl, displayAvailability, isResourceVisibilityAllowed, telHref } from "@/lib/domain";
+import { STATUS_KEY, bestSiteStatus, directionsUrl, displayAvailability, isResourceVisibilityAllowed, telHref } from "@/lib/domain";
 
 describe("displayAvailability", () => {
   it("never shows Available when the confirmation expired", () => {
@@ -19,7 +19,7 @@ describe("displayAvailability", () => {
   });
   it("depleted and closed are never confirmed-available", () => {
     expect(displayAvailability("DEPLETED", "FRESH").confirmedAvailable).toBe(false);
-    expect(displayAvailability("TEMPORARILY_CLOSED", "FRESH").tone).toBe("bad");
+    expect(displayAvailability("TEMPORARILY_CLOSED", "FRESH")).toMatchObject({ kind: "closed", label: "Temporarily closed" });
   });
 });
 
@@ -49,6 +49,39 @@ describe("service type colors (accessibility)", () => {
     await expect(
       runIn(db, { kind: "system" }, (tx) => tx.query(`UPDATE service_types SET color = '#ffcc00' WHERE code = 'FOOD'`)),
     ).rejects.toThrow(/service_types_color_contrast/);
+    await db.close();
+  });
+});
+
+describe("HopeGrid status semantics", () => {
+  it("maps every status to its own semantic kind with a text label", () => {
+    expect(displayAvailability("AVAILABLE", "FRESH").kind).toBe("available");
+    expect(displayAvailability("LIMITED", "FRESH").kind).toBe("limited");
+    expect(displayAvailability("DEPLETED", "FRESH").kind).toBe("depleted");
+    expect(displayAvailability("TEMPORARILY_CLOSED", "FRESH").kind).toBe("closed");
+    expect(displayAvailability("UNKNOWN", "FRESH").kind).toBe("unknown");
+    expect(displayAvailability("AVAILABLE", "EXPIRED")).toMatchObject({ kind: "unconfirmed", label: "Unconfirmed" });
+  });
+  it("a map pin shows the most useful confirmed status among its resources", () => {
+    expect(bestSiteStatus([{ reportedStatus: "DEPLETED", freshness: "FRESH" }, { reportedStatus: "LIMITED", freshness: "FRESH" }])).toBe("limited");
+    expect(bestSiteStatus([{ reportedStatus: "AVAILABLE", freshness: "EXPIRED" }, { reportedStatus: "DEPLETED", freshness: "FRESH" }])).toBe("depleted");
+    expect(bestSiteStatus([{ reportedStatus: "AVAILABLE", freshness: "EXPIRED" }])).toBe("unconfirmed");
+    expect(bestSiteStatus([])).toBe("unconfirmed");
+  });
+  it("the map key covers every status with a letter", () => {
+    expect(STATUS_KEY.map((k) => k.kind)).toEqual(["available", "limited", "depleted", "closed", "unknown", "unconfirmed"]);
+    for (const k of STATUS_KEY) expect(k.letter).toMatch(/^[A-Z?]$/);
+  });
+});
+
+describe("type colors never reuse status colors", () => {
+  it("rejects a reserved status color as an organization type color", async () => {
+    const db = await freshDb();
+    await expect(
+      runIn(db, { kind: "system" }, (tx) => tx.query(`UPDATE service_types SET color = '#2e7d32' WHERE code = 'SHELTER'`)),
+    ).rejects.toThrow(/service_types_not_status_color/);
+    const rows = await runIn(db, { kind: "system" }, (tx) => tx.query<{ code: string; color: string }>(`SELECT code, color FROM service_types`));
+    expect(rows.find((r) => r.code === "SHELTER")?.color).toBe("#00695c");
     await db.close();
   });
 });

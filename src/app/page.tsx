@@ -11,7 +11,6 @@ export default async function HomePage() {
   const [user, categories, serviceTypes] = await Promise.all([getCurrentUser(), listCategories(db), listServiceTypes(db)]);
   return (
     <>
-      <h1 className="sr-only">Find disaster recovery resources near you</h1>
       <ResourceMap categories={categories} signedIn={Boolean(user)} serviceTypes={serviceTypes} />
     </>
   );

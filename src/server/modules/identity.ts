@@ -118,7 +118,7 @@ async function sendConfirmation(tx: Tx, userId: string, orgId: string, email: st
   await enqueueEmail(tx, {
     kind: "EMAIL_CONFIRM",
     to: email,
-    subject: `Confirm your email for ${displayName}`,
+    subject: `HopeGrid: confirm your email for ${displayName}`,
     body:
       `Confirm your email to submit ${displayName} for verification:\n` +
       `${appBaseUrl()}/auth/confirm?token=${token}\n\nThis link expires in 24 hours. ` +
@@ -277,7 +277,7 @@ export async function requestSignIn(driver: Driver, rawEmail: unknown): Promise<
     await enqueueEmail(tx, {
       kind: "SIGN_IN",
       to: email,
-      subject: "Your ICS-LAS sign-in link",
+      subject: "Your HopeGrid sign-in link",
       body: `Sign in: ${appBaseUrl()}/auth/callback?token=${token}\n\nThis link expires in ${SIGN_IN_TTL_MIN} minutes and works once.`,
     });
   });

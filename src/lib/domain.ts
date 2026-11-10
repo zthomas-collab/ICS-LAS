@@ -58,9 +58,26 @@ export function isResourceVisibilityAllowed(site: Visibility, resource: Visibili
   return VISIBILITY_RANK[resource] >= VISIBILITY_RANK[site];
 }
 
+/**
+ * Semantic resource status kinds. Colors for these are reserved for status only and are never
+ * reused for organization/service types. Every rendering pairs color with text and an icon.
+ */
+export type StatusKind = "available" | "limited" | "depleted" | "closed" | "unknown" | "unconfirmed";
+
+export const STATUS_KEY: { kind: StatusKind; label: string; letter: string; meaning: string }[] = [
+  { kind: "available", label: "Available", letter: "A", meaning: "Confirmed available" },
+  { kind: "limited", label: "Limited", letter: "L", meaning: "Confirmed, running low" },
+  { kind: "depleted", label: "Depleted", letter: "D", meaning: "Confirmed out right now" },
+  { kind: "closed", label: "Temporarily closed", letter: "C", meaning: "Closed for now" },
+  { kind: "unknown", label: "Unknown", letter: "?", meaning: "Organization doesn't know" },
+  { kind: "unconfirmed", label: "Unconfirmed", letter: "?", meaning: "Not re-checked recently — call ahead" },
+];
+
 export type DisplayAvailability = {
   /** What to show as the headline status. Never "Available" when the confirmation has expired. */
   label: string;
+  kind: StatusKind;
+  /** @deprecated use kind; kept for older call sites */
   tone: "ok" | "warn" | "bad" | "muted";
   /** True only when the status is both positive and within its confirmation interval. */
   confirmedAvailable: boolean;
@@ -68,23 +85,42 @@ export type DisplayAvailability = {
   note?: string;
 };
 
+const KIND_TONE: Record<StatusKind, DisplayAvailability["tone"]> = {
+  available: "ok", limited: "warn", depleted: "bad", closed: "muted", unknown: "muted", unconfirmed: "muted",
+};
+
 export function displayAvailability(status: AvailabilityStatus, freshness: Freshness): DisplayAvailability {
   const stale = freshness === "EXPIRED" || freshness === "NEVER_CONFIRMED";
   if (stale) {
     return {
       label: "Unconfirmed",
+      kind: "unconfirmed",
       tone: "muted",
       confirmedAvailable: false,
       note: freshness === "NEVER_CONFIRMED" ? "Never confirmed" : `Last reported: ${AVAILABILITY_LABELS[status]}`,
     };
   }
-  const tone = status === "AVAILABLE" ? "ok" : status === "LIMITED" ? "warn" : status === "UNKNOWN" ? "muted" : "bad";
+  const kind: StatusKind =
+    status === "AVAILABLE" ? "available"
+    : status === "LIMITED" ? "limited"
+    : status === "DEPLETED" ? "depleted"
+    : status === "TEMPORARILY_CLOSED" ? "closed"
+    : "unknown";
   return {
     label: AVAILABILITY_LABELS[status],
-    tone,
-    confirmedAvailable: status === "AVAILABLE" || status === "LIMITED",
+    kind,
+    tone: KIND_TONE[kind],
+    confirmedAvailable: kind === "available" || kind === "limited",
     note: freshness === "DUE_SOON" ? "Reconfirmation due soon" : undefined,
   };
+}
+
+/** The single status a map marker shows: the most useful confirmed status among its resources. */
+export function bestSiteStatus(resources: { reportedStatus: string; freshness: string }[]): StatusKind {
+  const order: StatusKind[] = ["available", "limited", "depleted", "closed", "unknown", "unconfirmed"];
+  const kinds = resources.map((r) => displayAvailability(r.reportedStatus as AvailabilityStatus, r.freshness as Freshness).kind);
+  for (const k of order) if (kinds.includes(k)) return k;
+  return "unconfirmed";
 }
 
 /** Directions are only offered for publicly disclosed locations. */

@@ -3,13 +3,18 @@
 import "maplibre-gl/dist/maplibre-gl.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Map as MLMap, GeoJSONSource } from "maplibre-gl";
+import Link from "next/link";
 import {
+  STATUS_KEY,
+  bestSiteStatus,
   directionsUrl,
   displayAvailability,
   telHref,
   type AvailabilityStatus,
   type Freshness,
+  type StatusKind,
 } from "@/lib/domain";
+import { StatusIcon, StatusPill } from "./status-icons";
 import type { MapResult, MapSite, PlaceHit } from "@/server/modules/map";
 import type { ServiceType } from "@/server/modules/directory";
 
@@ -20,13 +25,19 @@ const STYLE_URL = process.env.NEXT_PUBLIC_MAP_STYLE_URL || "https://tiles.openfr
 const [DEF_LNG, DEF_LAT, DEF_ZOOM] = (process.env.NEXT_PUBLIC_DEFAULT_VIEW || "-82.55,35.6,9").split(",").map(Number);
 const MAX_SPAN = 12;
 
-function siteTone(site: MapSite): "ok" | "warn" | "muted" | "bad" {
-  const d = site.resources.map((r) => displayAvailability(r.reportedStatus as AvailabilityStatus, r.freshness as Freshness));
-  if (d.some((x) => x.tone === "ok")) return "ok";
-  if (d.some((x) => x.tone === "warn")) return "warn";
-  if (d.length && d.every((x) => x.tone === "bad")) return "bad";
-  return "muted";
-}
+/** Map-marker status badge colors (semantic, reserved for resource status). Text color keeps >= 4.5:1. */
+const STATUS_FILL: Record<StatusKind, { fill: string; text: string }> = {
+  available: { fill: "#2E7D32", text: "#FFFFFF" },
+  limited: { fill: "#F0B84B", text: "#24343A" },
+  depleted: { fill: "#C62828", text: "#FFFFFF" },
+  closed: { fill: "#B0BEC5", text: "#24343A" },
+  unknown: { fill: "#ECEFF1", text: "#24343A" },
+  unconfirmed: { fill: "#ECEFF1", text: "#24343A" },
+};
+const BRAND_FOREST = "#205C4B";
+const CHARCOAL = "#24343A";
+const statusMatch = (key: "fill" | "text") =>
+  ["match", ["get", "status"], ...STATUS_KEY.flatMap((k) => [k.kind, STATUS_FILL[k.kind][key]]), STATUS_FILL.unconfirmed[key]] as unknown as string;
 
 function fmtTime(iso: string | null) {
   if (!iso) return "never";
@@ -146,21 +157,27 @@ export default function ResourceMap({ categories, signedIn, serviceTypes }: { ca
         map.on("load", () => {
           map.addSource("sites", { type: "geojson", data: { type: "FeatureCollection", features: [] }, cluster: true, clusterRadius: 45, clusterMaxZoom: 13 });
           map.addLayer({ id: "clusters", type: "circle", source: "sites", filter: ["has", "point_count"],
-            paint: { "circle-color": "#0f4c5c", "circle-opacity": 0.85, "circle-radius": ["step", ["get", "point_count"], 16, 10, 22, 50, 28], "circle-stroke-width": 2, "circle-stroke-color": "#fff" } });
+            paint: { "circle-color": BRAND_FOREST, "circle-opacity": 0.9, "circle-radius": ["step", ["get", "point_count"], 16, 10, 22, 50, 28], "circle-stroke-width": 2, "circle-stroke-color": "#fff" } });
           map.addLayer({ id: "cluster-count", type: "symbol", source: "sites", filter: ["has", "point_count"],
             layout: { "text-field": ["get", "point_count_abbreviated"], "text-size": 13, "text-font": ["Noto Sans Regular"] }, paint: { "text-color": "#fff" } });
           map.addLayer({ id: "points", type: "circle", source: "sites", filter: ["!", ["has", "point_count"]],
             paint: {
               "circle-radius": 14,
-              // Fill = account service type (legend). Faded = no confirmed availability right now.
+              // Fill + code = organization type. Dark outline = restricted (signed-in only). See map key.
               "circle-color": ["get", "color"],
-              "circle-opacity": ["case", ["get", "confirmed"], 1, 0.55],
               "circle-stroke-width": ["case", ["get", "restricted"], 4, 2],
-              "circle-stroke-color": ["case", ["get", "restricted"], "#f2c26b", "#ffffff"],
+              "circle-stroke-color": ["case", ["get", "restricted"], CHARCOAL, "#ffffff"],
             } });
           map.addLayer({ id: "point-labels", type: "symbol", source: "sites", filter: ["!", ["has", "point_count"]],
             layout: { "text-field": ["get", "short"], "text-size": 10, "text-font": ["Noto Sans Bold"], "text-allow-overlap": true, "text-ignore-placement": true },
             paint: { "text-color": "#ffffff" } });
+          // Availability badge (top-right of each marker): semantic color + letter, explained in the map key.
+          map.addLayer({ id: "status-badges", type: "circle", source: "sites", filter: ["!", ["has", "point_count"]],
+            paint: { "circle-radius": 7.5, "circle-translate": [12, -12], "circle-color": statusMatch("fill"),
+              "circle-stroke-width": 1.5, "circle-stroke-color": CHARCOAL } });
+          map.addLayer({ id: "status-letters", type: "symbol", source: "sites", filter: ["!", ["has", "point_count"]],
+            layout: { "text-field": ["get", "letter"], "text-size": 10, "text-font": ["Noto Sans Bold"], "text-allow-overlap": true, "text-ignore-placement": true },
+            paint: { "text-color": statusMatch("text"), "text-translate": [12, -12] } });
           map.on("click", "clusters", async (e) => {
             const f = map.queryRenderedFeatures(e.point, { layers: ["clusters"] })[0];
             const src = map.getSource("sites") as GeoJSONSource;
@@ -175,7 +192,13 @@ export default function ResourceMap({ categories, signedIn, serviceTypes }: { ca
             const id = e.features?.[0]?.properties?.id as string | undefined;
             if (id) setSelectedId(id);
           });
-          for (const l of ["clusters", "points", "point-labels"]) {
+          for (const l of ["status-badges", "status-letters"]) {
+            map.on("click", l, (e) => {
+              const id = e.features?.[0]?.properties?.id as string | undefined;
+              if (id) setSelectedId(id);
+            });
+          }
+          for (const l of ["clusters", "points", "point-labels", "status-badges"]) {
             map.on("mouseenter", l, () => (map.getCanvas().style.cursor = "pointer"));
             map.on("mouseleave", l, () => (map.getCanvas().style.cursor = ""));
           }
@@ -204,13 +227,17 @@ export default function ResourceMap({ categories, signedIn, serviceTypes }: { ca
       features: (data?.sites ?? []).map((s) => ({
         type: "Feature",
         geometry: { type: "Point", coordinates: [s.lng, s.lat] },
-        properties: {
-          id: s.id,
-          color: s.serviceColor ?? "#616161",
-          short: s.serviceShort ?? "?",
-          confirmed: ["ok", "warn"].includes(siteTone(s)),
-          restricted: s.visibility !== "PUBLIC",
-        },
+        properties: (() => {
+          const status = bestSiteStatus(s.resources);
+          return {
+            id: s.id,
+            color: s.serviceColor ?? "#263238",
+            short: s.serviceShort ?? "?",
+            status,
+            letter: STATUS_KEY.find((k) => k.kind === status)?.letter ?? "?",
+            restricted: s.visibility !== "PUBLIC",
+          };
+        })(),
       })),
     });
   }, [data, mapReady]);
@@ -256,16 +283,23 @@ export default function ResourceMap({ categories, signedIn, serviceTypes }: { ca
   }
 
   function nearMe() {
-    if (!navigator.geolocation) return setGeoMsg("Location is not available on this device.");
+    if (!navigator.geolocation) return setGeoMsg("Location is not available on this device. Search by ZIP code instead.");
     setGeoMsg("Finding your location… (used only on this device to move the map)");
     navigator.geolocation.getCurrentPosition(
       (p) => {
-        setGeoMsg(null);
+        setGeoMsg("Showing help near you, closest first.");
         flyTo(p.coords.longitude, p.coords.latitude, 12);
+        setView("list"); // on phones, the nearest-first list is the fastest way to help
       },
       () => setGeoMsg("Location permission denied. Search by city, county or ZIP instead."),
       { timeout: 10_000, maximumAge: 60_000 },
     );
+  }
+
+  function exploreMap() {
+    setView("map");
+    mapEl.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    mapEl.current?.focus({ preventScroll: true });
   }
 
   const toggleService = (code: string) =>
@@ -275,12 +309,28 @@ export default function ResourceMap({ categories, signedIn, serviceTypes }: { ca
   // ---- render ------------------------------------------------------------
   return (
     <div className="flex min-h-0 flex-1 flex-col">
+      <section aria-labelledby="hero-h" className="border-b border-line bg-mint-soft px-4 py-4 sm:py-5">
+        <div className="mx-auto flex max-w-6xl flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div>
+            <h1 id="hero-h" className="text-2xl font-extrabold tracking-tight sm:text-3xl" style={{ color: "var(--hope-forest)" }}>
+              Help Is Closer Than You Think.
+            </h1>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button type="button" className="btn btn-attention text-base" onClick={nearMe}>
+              <svg width="18" height="18" viewBox="0 0 16 16" aria-hidden><path d="M8 1.5c-2.6 0-4.5 2-4.5 4.4 0 3.3 4.5 8.6 4.5 8.6s4.5-5.3 4.5-8.6C12.5 3.5 10.6 1.5 8 1.5z" fill="currentColor" /><circle cx="8" cy="6" r="1.7" fill="#F0B84B" /></svg>
+              Find Help Near Me
+            </button>
+            <button type="button" className="btn btn-secondary" onClick={exploreMap}>Explore Resource Map</button>
+            <Link href="/signin?tab=register" className="btn btn-primary">Register Your Organization</Link>
+          </div>
+        </div>
+      </section>
       <div className="border-b border-line bg-surface px-3 py-2">
         <form onSubmit={runSearch} role="search" className="flex gap-2">
           <label htmlFor="q" className="sr-only">Search by city, county, ZIP or address</label>
           <input id="q" className="input" placeholder="City, county, ZIP or address" value={query} onChange={(e) => setQuery(e.target.value)} />
           <button className="btn btn-primary" type="submit">Search</button>
-          <button className="btn btn-secondary whitespace-nowrap" type="button" onClick={nearMe}>Near me</button>
         </form>
         {geoMsg && <p role="status" className="mt-1 text-sm text-muted">{geoMsg}</p>}
         {searchNote && <p role="status" className="mt-1 text-sm text-muted">{searchNote}</p>}
@@ -346,7 +396,7 @@ export default function ResourceMap({ categories, signedIn, serviceTypes }: { ca
             </div>
           ) : (
             // Inline position wins over .maplibregl-map { position: relative } from MapLibre's stylesheet.
-            <div ref={mapEl} style={{ position: "absolute", inset: 0 }} role="region" aria-label="Resource map" />
+            <div ref={mapEl} tabIndex={-1} style={{ position: "absolute", inset: 0 }} role="region" aria-label="Resource map" />
           )}
           {!mapFailed && (
             <Legend serviceTypes={serviceTypes} selected={selectedServices} onToggle={toggleService} onReset={() => setSelectedServices([])} />
@@ -385,7 +435,7 @@ export default function ResourceMap({ categories, signedIn, serviceTypes }: { ca
                   <div className="mt-1 flex flex-wrap gap-1">
                     {s.resources.slice(0, 4).map((r) => {
                       const d = displayAvailability(r.reportedStatus as AvailabilityStatus, r.freshness as Freshness);
-                      return <span key={r.id} className={`badge tone-${d.tone}`}>{r.categoryLabel}: {d.label}</span>;
+                      return <StatusPill key={r.id} kind={d.kind} label={`${r.categoryLabel}: ${d.label}`} />;
                     })}
                     {s.resources.length > 4 && <span className="badge tone-muted">+{s.resources.length - 4} more</span>}
                   </div>
@@ -448,7 +498,7 @@ function SiteDetail({ site, stale, onClose }: { site: MapSite; stale: boolean; o
               <div className="flex flex-wrap items-center gap-2">
                 <span className="font-medium">{r.name}</span>
                 <span className="text-xs text-muted">{r.categoryLabel}</span>
-                <span className={`badge tone-${d.tone}`}>{d.label}</span>
+                <StatusPill kind={d.kind} label={d.label} />
                 {r.visibility !== "PUBLIC" && <span className="badge tone-warn">Restricted</span>}
               </div>
               {d.note && <div className="text-xs text-muted">{d.note}</div>}
@@ -466,37 +516,61 @@ function SiteDetail({ site, stale, onClose }: { site: MapSite; stale: boolean; o
   );
 }
 
+/** Map key: explains every color and mark used on the map. Always visible on larger screens. */
 function Legend({ serviceTypes, selected, onToggle, onReset }: { serviceTypes: ServiceType[]; selected: string[]; onToggle: (code: string) => void; onReset: () => void }) {
   const [open, setOpen] = useState(false);
   return (
-    <div className="absolute bottom-8 left-2 z-10 max-h-[70%] max-w-[16rem] overflow-y-auto rounded-lg border border-line bg-surface/95 p-2 text-xs shadow">
-      <button type="button" className="flex w-full items-center justify-between gap-2 font-semibold" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
-        Map legend{selected.length ? ` · ${selected.length} shown` : ""} <span aria-hidden>{open ? "▾" : "▸"}</span>
+    <div className="absolute bottom-8 left-2 z-10 max-h-[75%] w-[17rem] max-w-[calc(100%-1rem)] overflow-y-auto rounded-lg border border-line bg-surface p-2 text-xs shadow-lg">
+      <h2 className="m-0">
+      <button type="button" className="flex w-full items-center justify-between gap-2 text-sm font-bold md:cursor-default" aria-expanded={open} aria-controls="map-key" onClick={() => setOpen((v) => !v)}>
+        Map key{selected.length ? ` · ${selected.length} type${selected.length === 1 ? "" : "s"} shown` : ""}
+        <span aria-hidden className="md:hidden">{open ? "▾" : "▸"}</span>
       </button>
-      {open && (
-        <>
-          <p className="mt-1 text-muted">Color = organization type. Tap to show only those types.</p>
-          <ul className="mt-1 grid gap-0.5" role="group" aria-label="Filter by organization type">
-            {serviceTypes.map((t) => {
-              const on = selected.includes(t.code);
-              return (
-                <li key={t.code}>
-                  <button type="button" aria-pressed={on} onClick={() => onToggle(t.code)}
-                    className={`flex min-h-8 w-full items-center gap-2 rounded px-1 text-left ${on ? "bg-neutral-bg font-semibold" : ""}`}>
-                    <span aria-hidden className="inline-flex h-6 min-w-6 items-center justify-center rounded-full px-1 text-[9px] font-bold text-white" style={{ background: t.color }}>{t.shortLabel}</span>
-                    {t.label}
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-          <div className="mt-2 grid gap-1 border-t border-line pt-2 text-muted">
-            <span className="flex items-center gap-2"><span aria-hidden className="inline-block h-4 w-4 rounded-full bg-[#616161] opacity-50 ring-2 ring-white" /> Faded: no confirmed availability</span>
-            <span className="flex items-center gap-2"><span aria-hidden className="inline-block h-4 w-4 rounded-full bg-[#616161] ring-4 ring-[#f2c26b]" /> Gold ring: restricted (signed-in only)</span>
-          </div>
-          {selected.length > 0 && <button type="button" className="mt-2 text-brand underline" onClick={onReset}>Show all types</button>}
-        </>
-      )}
+      </h2>
+      <div id="map-key" className={`${open ? "block" : "hidden"} md:block`}>
+        <h3 className="mt-2 font-bold text-ink">Availability (badge on each pin)</h3>
+        <ul className="mt-1 grid gap-1">
+          {STATUS_KEY.filter((k) => k.kind !== "unknown").map((k) => (
+            <li key={k.kind} className="flex items-center gap-2">
+              <span aria-hidden className="inline-flex h-5 w-5 flex-none items-center justify-center rounded-full border text-[10px] font-bold"
+                style={{ background: STATUS_FILL[k.kind].fill, color: STATUS_FILL[k.kind].text, borderColor: CHARCOAL }}>{k.letter}</span>
+              <span className={`status status-${k.kind}`}><StatusIcon kind={k.kind} size={12} />{k.label}</span>
+              <span className="sr-only">: {k.meaning}</span>
+            </li>
+          ))}
+        </ul>
+        <p className="mt-1 text-muted">“?” also means the organization reported Unknown.</p>
+
+        <h3 className="mt-3 font-bold text-ink">Organization type (pin color + code)</h3>
+        <p className="text-muted">Tap a type to show only those.</p>
+        <ul className="mt-1 grid gap-0.5" aria-label="Filter by organization type">
+          {serviceTypes.map((t) => {
+            const on = selected.includes(t.code);
+            return (
+              <li key={t.code}>
+                <button type="button" aria-pressed={on} onClick={() => onToggle(t.code)}
+                  className={`flex min-h-8 w-full items-center gap-2 rounded px-1 text-left ${on ? "bg-mint-soft font-semibold ring-1 ring-brand" : "hover:bg-mint-soft"}`}>
+                  <span aria-hidden className="inline-flex h-6 min-w-6 items-center justify-center rounded-full px-1 text-[9px] font-bold text-white" style={{ background: t.color }}>{t.shortLabel}</span>
+                  {t.label}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+        {selected.length > 0 && <button type="button" className="mt-1 text-brand underline" onClick={onReset}>Show all types</button>}
+
+        <h3 className="mt-3 font-bold text-ink">Other marks</h3>
+        <ul className="mt-1 grid gap-1 text-ink">
+          <li className="flex items-center gap-2">
+            <span aria-hidden className="inline-flex h-6 w-6 flex-none items-center justify-center rounded-full text-[10px] font-bold text-white ring-2 ring-white" style={{ background: BRAND_FOREST }}>5</span>
+            Group of 5 locations — tap or zoom in
+          </li>
+          <li className="flex items-center gap-2">
+            <span aria-hidden className="inline-block h-6 w-6 flex-none rounded-full" style={{ background: "#263238", boxShadow: `0 0 0 4px ${CHARCOAL}`, outline: "2px solid #fff" }} />
+            Thick dark outline: restricted location (signed-in, authorized users only)
+          </li>
+        </ul>
+      </div>
     </div>
   );
 }

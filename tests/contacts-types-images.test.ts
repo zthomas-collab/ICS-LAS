@@ -92,7 +92,7 @@ describe("service types", () => {
     await createSite(db, editorB, orgB, site({ name: "Clinic", lat: 35.6, lng: -82.56 }));
     const all = await queryMap(db, null, ASHEVILLE_BBOX);
     expect(all.sites.map((s) => [s.name, s.serviceType, s.serviceShort, s.serviceColor]).sort()).toEqual([
-      ["Clinic", "HEALTHCARE", "MED", "#c62828"],
+      ["Clinic", "HEALTHCARE", "MED", "#00838f"],
       ["Water point", "WATER", "H2O", "#1565c0"],
     ]);
     expect((await queryMap(db, null, { ...ASHEVILLE_BBOX, services: "HEALTHCARE" })).sites.map((s) => s.name)).toEqual(["Clinic"]);

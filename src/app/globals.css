@@ -1,41 +1,43 @@
 @import "tailwindcss";
 
+/*
+ * HopeGrid brand tokens (light theme only, applied everywhere for a consistent brand).
+ * Contrast notes (WCAG AA): Community Blue #2684B8 is 4.14:1 on white, so it is used for
+ * map graphics / UI shapes (needs 3:1) and the darker --link shade is used for text.
+ * Hope Gold is a background (charcoal text 7.2:1), never text.
+ */
 :root {
-  --bg: #f7f7f5;
-  --surface: #ffffff;
-  --ink: #1b1d1f;
-  --muted: #5b6168;
-  --line: #d9dcdf;
-  --brand: #0f4c5c;
-  --brand-ink: #ffffff;
-  --ok: #1d6b3a;
-  --ok-bg: #e3f3e8;
-  --warn: #8a5300;
-  --warn-bg: #fdf0d9;
-  --bad: #a3271f;
-  --bad-bg: #fbe4e2;
-  --neutral-bg: #eceef0;
-  --focus: #1a73e8;
-}
+  --hope-forest: #205c4b;      /* brand headers, navigation, primary identity */
+  --community-blue: #2684b8;   /* interactive map graphics, focus rings */
+  --link: #1d6a95;             /* Community Blue, darkened for AA text (5.6:1 on ivory) */
+  --recovery-mint: #bde8d2;    /* soft highlights, supportive backgrounds */
+  --hope-gold: #f0b84b;        /* attention elements, positive accents (background only) */
+  --warm-ivory: #faf9f4;       /* main application background */
+  --deep-charcoal: #24343a;    /* primary body text */
+  --pure-white: #ffffff;       /* cards, forms */
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #121416;
-    --surface: #1b1e21;
-    --ink: #eceef0;
-    --muted: #a5abb2;
-    --line: #2e3337;
-    --brand: #4fb3c8;
-    --brand-ink: #0b1a1e;
-    --ok: #7fd49b;
-    --ok-bg: #18301f;
-    --warn: #f2c26b;
-    --warn-bg: #33270f;
-    --bad: #f19a92;
-    --bad-bg: #3a1a17;
-    --neutral-bg: #2a2e32;
-    --focus: #8ab4f8;
-  }
+  --bg: var(--warm-ivory);
+  --surface: var(--pure-white);
+  --ink: var(--deep-charcoal);
+  --muted: #56666c;            /* 5.7:1 on ivory */
+  --line: #d6ddd8;
+  --brand: var(--hope-forest);
+  --brand-ink: var(--pure-white);
+  --mint-soft: #e9f6ef;
+  --focus: var(--community-blue);
+
+  /* Resource status — semantic, never used for organization types */
+  --status-available-fg: #1b5e20;  --status-available-bg: #e3f4e6;  --status-available-solid: #2e7d32;
+  --status-limited-fg: #6b4300;    --status-limited-bg: #fdf1d6;    --status-limited-solid: #f0b84b;
+  --status-depleted-fg: #a61b1b;   --status-depleted-bg: #fde8e8;   --status-depleted-solid: #c62828;
+  --status-closed-fg: #37474f;     --status-closed-bg: #e6eaec;     --status-closed-solid: #b0bec5;
+  --status-unknown-fg: #455a64;    --status-unknown-bg: #f1f3f4;    --status-unknown-solid: #eceff1;
+
+  /* Generic tones (org status, form feedback) */
+  --ok: var(--status-available-fg);   --ok-bg: var(--status-available-bg);
+  --warn: var(--status-limited-fg);   --warn-bg: var(--status-limited-bg);
+  --bad: var(--status-depleted-fg);   --bad-bg: var(--status-depleted-bg);
+  --neutral-bg: var(--status-closed-bg);
 }
 
 @theme inline {
@@ -46,6 +48,11 @@
   --color-line: var(--line);
   --color-brand: var(--brand);
   --color-brand-ink: var(--brand-ink);
+  --color-link: var(--link);
+  --color-blue: var(--community-blue);
+  --color-mint: var(--recovery-mint);
+  --color-mint-soft: var(--mint-soft);
+  --color-gold: var(--hope-gold);
   --color-ok: var(--ok);
   --color-ok-bg: var(--ok-bg);
   --color-warn: var(--warn);
@@ -59,25 +66,43 @@
 html, body { height: 100%; }
 body { background: var(--bg); color: var(--ink); font-family: var(--font-sans); }
 :focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+a { color: inherit; }
+.text-brand { color: var(--link); } /* legacy class name: brand-coloured text links use the AA blue */
 
 .field { display: grid; gap: 0.25rem; }
 .field > span { font-size: 0.875rem; font-weight: 600; }
 .input {
-  width: 100%; border: 1px solid var(--line); background: var(--surface); color: var(--ink);
+  width: 100%; border: 1px solid #b7c2bd; background: var(--surface); color: var(--ink);
   border-radius: 0.5rem; padding: 0.6rem 0.75rem; font-size: 1rem; min-height: 44px;
 }
+.input:focus-visible { border-color: var(--community-blue); }
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 0.4rem; min-height: 44px;
-  padding: 0.5rem 1rem; border-radius: 0.5rem; font-weight: 600; border: 1px solid transparent; cursor: pointer;
+  padding: 0.5rem 1rem; border-radius: 0.5rem; font-weight: 600; border: 2px solid transparent; cursor: pointer;
+  text-decoration: none;
 }
 .btn:disabled { opacity: 0.6; cursor: not-allowed; }
-.btn-primary { background: var(--brand); color: var(--brand-ink); }
-.btn-secondary { background: var(--surface); color: var(--ink); border-color: var(--line); }
+.btn-primary { background: var(--hope-forest); color: var(--pure-white); }
+.btn-primary:hover { background: #184838; }
+.btn-attention { background: var(--hope-gold); color: var(--deep-charcoal); }
+.btn-attention:hover { background: #e5a935; }
+.btn-secondary { background: var(--surface); color: var(--link); border-color: var(--link); }
+.btn-secondary:hover { background: #eef6fb; }
 .btn-danger { background: var(--surface); color: var(--bad); border-color: var(--bad); }
 .card { background: var(--surface); border: 1px solid var(--line); border-radius: 0.75rem; }
-.badge { display: inline-flex; align-items: center; border-radius: 999px; padding: 0.1rem 0.55rem; font-size: 0.75rem; font-weight: 600; }
+.badge { display: inline-flex; align-items: center; gap: 0.25rem; border-radius: 999px; padding: 0.1rem 0.55rem; font-size: 0.75rem; font-weight: 600; }
 .tone-ok { background: var(--ok-bg); color: var(--ok); }
 .tone-warn { background: var(--warn-bg); color: var(--warn); }
 .tone-bad { background: var(--bad-bg); color: var(--bad); }
-.tone-muted { background: var(--neutral-bg); color: var(--muted); }
+.tone-muted { background: var(--neutral-bg); color: var(--status-closed-fg); }
+.tone-brand { background: var(--mint-soft); color: var(--hope-forest); }
+
+/* Resource status badges: color + icon + text, always together */
+.status { display: inline-flex; align-items: center; gap: 0.3rem; border-radius: 999px; padding: 0.15rem 0.6rem 0.15rem 0.4rem; font-size: 0.75rem; font-weight: 700; border: 1px solid transparent; }
+.status-available { background: var(--status-available-bg); color: var(--status-available-fg); border-color: #a5d6a7; }
+.status-limited { background: var(--status-limited-bg); color: var(--status-limited-fg); border-color: #f0b84b; }
+.status-depleted { background: var(--status-depleted-bg); color: var(--status-depleted-fg); border-color: #ef9a9a; }
+.status-closed { background: var(--status-closed-bg); color: var(--status-closed-fg); border-color: #b0bec5; }
+.status-unknown, .status-unconfirmed { background: var(--status-unknown-bg); color: var(--status-unknown-fg); border-color: #90a4ae; border-style: dashed; }
+
 .maplibregl-popup-content { background: var(--surface); color: var(--ink); }

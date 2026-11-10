@@ -185,7 +185,7 @@ async function decideTx(driver: Driver, adminUserId: string, input: z.infer<type
     await enqueueEmail(tx, {
       kind: `ORG_${input.decision}`,
       to: rows[0].contact_email,
-      subject: `Organization status update: ${rows[0].display_name}`,
+      subject: `HopeGrid: organization status update for ${rows[0].display_name}`,
       body: `${rows[0].display_name} ${messages[input.decision]}`,
     });
   });
