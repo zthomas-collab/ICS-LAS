@@ -20,11 +20,11 @@ export async function makeOrg(
   return runIn(db, { kind: "system" }, async (tx) => {
     const o = await tx.query<{ id: string }>(
       `INSERT INTO organizations (legal_name, display_name, org_type, status, contact_email, is_synthetic, approved_at,
-                                  primary_service_type, public_phone, public_email, directory_consent_at)
+                                  primary_service_type, public_phone, public_email, directory_consent_at, profile_status)
        VALUES ($1, $1, 'NONPROFIT', $2::org_status, 'private-contact@example.test', true,
                CASE WHEN $2 = 'APPROVED' THEN now() END,
                CASE WHEN $2 IN ('APPROVED','SUSPENDED') THEN $3 END, '(555) 010-0000', 'public@example.test',
-               CASE WHEN $4 THEN now() END) RETURNING id`,
+               CASE WHEN $4 THEN now() END, CASE WHEN $2 IN ('APPROVED','SUSPENDED') THEN 'APPROVED' ELSE 'PENDING' END) RETURNING id`,
       [`[TEST] ${opts.name}`, opts.status ?? "APPROVED", opts.serviceType ?? "FOOD", opts.consent ?? false],
     );
     for (const m of opts.members ?? []) {

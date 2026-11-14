@@ -30,7 +30,7 @@ export function sniffImageType(bytes: Buffer): "jpeg" | "png" | "webp" | null {
 
 export type ProcessedImage = { bytes: Buffer; width: number; height: number; sha256: string };
 
-export async function processImage(input: Buffer): Promise<ProcessedImage> {
+export async function processImage(input: Buffer, maxEdge: number = MAX_EDGE): Promise<ProcessedImage> {
   if (input.length === 0) throw new AppError("VALIDATION", "Choose an image to upload.", { image: ["Required"] });
   if (input.length > MAX_UPLOAD_BYTES) throw new AppError("VALIDATION", "Images must be 5 MB or smaller.", { image: ["Too large"] });
   const kind = sniffImageType(input);
@@ -38,7 +38,7 @@ export async function processImage(input: Buffer): Promise<ProcessedImage> {
   try {
     const { data, info } = await sharp(input, { limitInputPixels: MAX_INPUT_PIXELS, failOn: "error", animated: false })
       .rotate() // apply EXIF orientation, then metadata is discarded on output
-      .resize({ width: MAX_EDGE, height: MAX_EDGE, fit: "inside", withoutEnlargement: true })
+      .resize({ width: maxEdge, height: maxEdge, fit: "inside", withoutEnlargement: true })
       .webp({ quality: 80 })
       .toBuffer({ resolveWithObject: true });
     return { bytes: data, width: info.width, height: info.height, sha256: createHash("sha256").update(data).digest("hex") };

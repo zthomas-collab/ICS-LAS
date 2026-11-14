@@ -1,20 +1,30 @@
 @import "tailwindcss";
 
 /*
- * HopeGrid brand tokens (light theme only, applied everywhere for a consistent brand).
- * Contrast notes (WCAG AA): Community Blue #2684B8 is 4.14:1 on white, so it is used for
- * map graphics / UI shapes (needs 3:1) and the darker --link shade is used for text.
- * Hope Gold is a background (charcoal text 7.2:1), never text.
+ * Brand tokens. The --cc-* variables are the ONLY brand knobs: src/config/brand.ts validates
+ * overrides (BRAND_COLOR_* env vars) and injects them in <head> after this sheet. The values below
+ * are PLACEHOLDER defaults used when nothing is configured (final brand colors not yet supplied).
+ * The legacy names that follow are aliases so existing components keep working.
+ * Contrast (WCAG AA): the interactive color is used for map graphics (needs 3:1) and --cc-link for
+ * text; the accent is a background only (dark text on it).
  */
 :root {
-  --hope-forest: #205c4b;      /* brand headers, navigation, primary identity */
-  --community-blue: #2684b8;   /* interactive map graphics, focus rings */
-  --link: #1d6a95;             /* Community Blue, darkened for AA text (5.6:1 on ivory) */
-  --recovery-mint: #bde8d2;    /* soft highlights, supportive backgrounds */
-  --hope-gold: #f0b84b;        /* attention elements, positive accents (background only) */
-  --warm-ivory: #faf9f4;       /* main application background */
-  --deep-charcoal: #24343a;    /* primary body text */
-  --pure-white: #ffffff;       /* cards, forms */
+  --cc-primary: #205c4b;
+  --cc-interactive: #2684b8;
+  --cc-link: #1d6a95;
+  --cc-soft: #bde8d2;
+  --cc-accent: #f0b84b;
+  --cc-background: #faf9f4;
+  --cc-text: #24343a;
+
+  --hope-forest: var(--cc-primary);        /* brand headers, navigation, primary identity */
+  --community-blue: var(--cc-interactive); /* interactive map graphics, focus rings */
+  --link: var(--cc-link);
+  --recovery-mint: var(--cc-soft);         /* soft highlights, supportive backgrounds */
+  --hope-gold: var(--cc-accent);           /* attention elements (background only) */
+  --warm-ivory: var(--cc-background);      /* main application background */
+  --deep-charcoal: var(--cc-text);         /* primary body text */
+  --pure-white: #ffffff;                   /* cards, forms */
 
   --bg: var(--warm-ivory);
   --surface: var(--pure-white);
@@ -23,7 +33,7 @@
   --line: #d6ddd8;
   --brand: var(--hope-forest);
   --brand-ink: var(--pure-white);
-  --mint-soft: #e9f6ef;
+  --mint-soft: color-mix(in srgb, var(--cc-soft) 35%, white);
   --focus: var(--community-blue);
 
   /* Resource status — semantic, never used for organization types */
@@ -83,9 +93,9 @@ a { color: inherit; }
 }
 .btn:disabled { opacity: 0.6; cursor: not-allowed; }
 .btn-primary { background: var(--hope-forest); color: var(--pure-white); }
-.btn-primary:hover { background: #184838; }
+.btn-primary:hover { background: color-mix(in srgb, var(--cc-primary) 85%, black); }
 .btn-attention { background: var(--hope-gold); color: var(--deep-charcoal); }
-.btn-attention:hover { background: #e5a935; }
+.btn-attention:hover { background: color-mix(in srgb, var(--cc-accent) 90%, black); }
 .btn-secondary { background: var(--surface); color: var(--link); border-color: var(--link); }
 .btn-secondary:hover { background: #eef6fb; }
 .btn-danger { background: var(--surface); color: var(--bad); border-color: var(--bad); }
