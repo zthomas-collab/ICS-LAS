@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import type { Driver } from "./driver";
+import { syncZipCounty } from "../modules/zipcounty";
 
 export const MIGRATIONS_DIR = path.join(/* turbopackIgnore: true */ process.cwd(), "db", "migrations");
 
@@ -31,5 +32,7 @@ export async function migrate(driver: Driver, dir = MIGRATIONS_DIR): Promise<str
     }
     ran.push(file);
   }
+  // Static reference data shipped with the code (loaded only for the real migrations directory; no-op when unchanged).
+  if (dir === MIGRATIONS_DIR) await syncZipCounty(driver);
   return ran;
 }
