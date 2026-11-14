@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { getDriver } from "@/server/db";
 import { listMyOrganizations } from "@/server/modules/organizations";
 import { listOrgSites } from "@/server/modules/sites";
@@ -24,6 +25,7 @@ export default async function DashboardPage() {
   const user = await requireUser();
   const db = await getDriver();
   const [orgs, serviceTypes] = await Promise.all([listMyOrganizations(db, user.id), listServiceTypes(db)]);
+  if (orgs.length === 0 && !user.countyAdmin && user.platformRoles.length === 0) redirect("/assistance");
   const sitesByOrg = await Promise.all(orgs.map((o) => (o.status === "APPROVED" ? listOrgSites(db, user.id, o.id) : Promise.resolve([]))));
 
   return (

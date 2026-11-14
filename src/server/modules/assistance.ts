@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { zipMatchesCounty } from "./zipcounty";
 import { z } from "zod";
 import type { Driver, Tx } from "../db";
 import { runIn } from "../db/context";
@@ -198,6 +199,9 @@ export async function submitApplication(driver: Driver, userId: string, raw: unk
       }
       const county = await tx.query<{ name: string }>(`SELECT name FROM counties WHERE id = $1 AND active`, [input.countyId]);
       if (!county.length) throw new AppError("VALIDATION", "Choose your county.", { countyId: ["Unknown county"] });
+      if (!(await zipMatchesCounty(tx, input.zip, input.countyId))) {
+        throw new AppError("VALIDATION", "That ZIP code is not in the county you chose. Check both, or choose the county the ZIP code belongs to.", { zip: ["Not in this county"] });
+      }
       const cat = await tx.query<{ label: string }>(`SELECT label FROM assistance_categories WHERE code = $1 AND active`, [input.categoryCode]);
       if (!cat.length) throw new AppError("VALIDATION", "Choose a type of assistance.", { categoryCode: ["Unknown type"] });
 
@@ -673,4 +677,13 @@ export async function setRoutingRuleActive(driver: Driver, userId: string, ruleI
     await tx.query(`UPDATE application_routing_rules SET active = $2 WHERE id = $1`, [id, active]);
     await writeAudit(tx, { actorUserId: userId, action: active ? "ROUTING_RULE_ENABLED" : "ROUTING_RULE_DISABLED", subjectType: "routing_rule", subjectId: id });
   });
+}
+
+export type AssistanceCategory = { code: string; label: string; description: string };
+
+/** Active categories for the application form (public reference data). */
+export async function listAssistanceCategories(driver: Driver): Promise<AssistanceCategory[]> {
+  return runIn(driver, { kind: "anon" }, (tx) =>
+    tx.query<AssistanceCategory>(`SELECT code, label, description FROM assistance_categories WHERE active ORDER BY sort_order, label`),
+  );
 }
