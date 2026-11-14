@@ -3,7 +3,7 @@ import type { Driver, Tx } from "../db";
 import { runIn } from "../db/context";
 import { AppError, fromDbError } from "../errors";
 import { ORG_TYPES } from "@/lib/domain";
-import { appBaseUrl, enqueueEmail, hashToken, newToken, writeAudit } from "./shared";
+import { appBaseUrl, brandName, enqueueEmail, hashToken, newToken, writeAudit } from "./shared";
 
 /**
  * Identity module — DEV AUTH ADAPTER.
@@ -118,7 +118,7 @@ async function sendConfirmation(tx: Tx, userId: string, orgId: string, email: st
   await enqueueEmail(tx, {
     kind: "EMAIL_CONFIRM",
     to: email,
-    subject: `HopeGrid: confirm your email for ${displayName}`,
+    subject: `${brandName()}: confirm your email for ${displayName}`,
     body:
       `Confirm your email to submit ${displayName} for verification:\n` +
       `${appBaseUrl()}/auth/confirm?token=${token}\n\nThis link expires in 24 hours. ` +
@@ -277,7 +277,7 @@ export async function requestSignIn(driver: Driver, rawEmail: unknown): Promise<
     await enqueueEmail(tx, {
       kind: "SIGN_IN",
       to: email,
-      subject: "Your HopeGrid sign-in link",
+      subject: `Your ${brandName()} sign-in link`,
       body: `Sign in: ${appBaseUrl()}/auth/callback?token=${token}\n\nThis link expires in ${SIGN_IN_TTL_MIN} minutes and works once.`,
     });
   });
@@ -297,6 +297,8 @@ export type SessionUser = {
   displayName: string;
   mfaEnrolled: boolean;
   platformRoles: string[];
+  /** True when the user holds at least one active county administrator assignment. */
+  countyAdmin: boolean;
 };
 
 export async function resolveSession(driver: Driver, sessionToken: string | undefined): Promise<SessionUser | null> {
@@ -316,12 +318,18 @@ export async function resolveSession(driver: Driver, sessionToken: string | unde
         WHERE user_id = $1 AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at > now())`,
       [rows[0].id],
     );
+    const counties = await tx.query<{ n: number }>(
+      `SELECT count(*)::int AS n FROM county_admin_assignments
+        WHERE user_id = $1 AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at > now())`,
+      [rows[0].id],
+    );
     return {
       id: rows[0].id,
       email: rows[0].email,
       displayName: rows[0].display_name,
       mfaEnrolled: rows[0].mfa_enrolled_at !== null,
       platformRoles: roles.map((r) => r.role),
+      countyAdmin: (counties[0]?.n ?? 0) > 0,
     };
   });
 }

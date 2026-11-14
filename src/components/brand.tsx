@@ -1,11 +1,21 @@
-/** HopeGrid mark: a map pin over a grid, in brand colors. Decorative (the wordmark carries the name). */
-export function HopeGridMark({ size = 28 }: { size?: number }) {
+/* eslint-disable @next/next/no-img-element -- same-origin brand logo from /public; no optimizer needed */
+
+/**
+ * Brand mark. Renders the configured logo (BRAND_LOGO_PATH, a same-origin file under /public) or,
+ * when none is configured, a neutral placeholder compass drawn with the theme variables.
+ * Decorative: the wordmark next to it carries the name.
+ */
+export function BrandMark({ size = 28, logoPath }: { size?: number; logoPath?: string | null }) {
+  if (logoPath) {
+    return <img src={logoPath} alt="" width={size} height={size} className="object-contain" style={{ width: size, height: size }} />;
+  }
   return (
     <svg width={size} height={size} viewBox="0 0 32 32" aria-hidden focusable="false">
-      <rect x="1" y="1" width="30" height="30" rx="8" fill="#BDE8D2" />
-      <path d="M8 1v30M16 1v30M24 1v30M1 8h30M1 16h30M1 24h30" stroke="#205C4B" strokeOpacity=".18" strokeWidth="1.2" />
-      <path d="M16 6.5c-4 0-7 3-7 6.8 0 5 7 12.2 7 12.2s7-7.2 7-12.2c0-3.8-3-6.8-7-6.8z" fill="#205C4B" />
-      <circle cx="16" cy="13.3" r="2.8" fill="#F0B84B" />
+      <rect x="1" y="1" width="30" height="30" rx="8" fill="var(--cc-soft)" />
+      <circle cx="16" cy="16" r="10" fill="none" stroke="var(--cc-primary)" strokeWidth="2" />
+      <path d="M16 7l3.2 9L16 25l-3.2-9z" fill="var(--cc-primary)" />
+      <path d="M16 7l3.2 9h-6.4z" fill="var(--cc-accent)" />
+      <circle cx="16" cy="16" r="1.4" fill="var(--cc-background)" />
     </svg>
   );
 }

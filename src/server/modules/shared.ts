@@ -1,3 +1,4 @@
+import { getBrand } from "@/config/brand";
 import { createHash, randomBytes } from "node:crypto";
 import type { Tx } from "../db";
 
@@ -47,4 +48,9 @@ export async function enqueueEmail(
 
 export function appBaseUrl(): string {
   return (process.env.APP_BASE_URL ?? "http://localhost:3000").replace(/\/$/, "");
+}
+
+/** Display name used in outgoing email subjects (configured in src/config/brand.ts). */
+export function brandName(): string {
+  return getBrand().name;
 }

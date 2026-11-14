@@ -15,7 +15,15 @@ import {
   updateSite,
 } from "@/server/modules/sites";
 import { decideOrganization } from "@/server/modules/organizations";
-import { setPrimaryServiceType, updateOrganizationProfile } from "@/server/modules/directory";
+import {
+  removeOrganizationLogo,
+  reviewOrganizationProfile,
+  setPrimaryServiceType,
+  updateOrganizationProfile,
+  uploadOrganizationLogo,
+} from "@/server/modules/directory";
+import { assignCountyAdmin, createCounty, revokeCountyAdmin } from "@/server/modules/counties";
+import { SOCIAL_KINDS } from "@/lib/links";
 import { MAX_UPLOAD_BYTES, removeSiteImage, uploadSiteImage } from "@/server/modules/images";
 import { getObjectStore } from "@/server/storage";
 import { requireUser } from "@/server/session";
@@ -110,12 +118,15 @@ export async function updateProfileAction(orgId: string, _prev: FormState, form:
     await updateOrganizationProfile(await getDriver(), user.id, orgId, {
       ...fields(form),
       additionalServiceTypes: form.getAll("additionalServiceTypes"),
+      countyIds: form.getAll("countyIds"),
+      socialLinks: Object.fromEntries(SOCIAL_KINDS.map((k) => [k, String(form.get(`social_${k}`) ?? "")])),
     });
   } catch (err) {
     return toState(err);
   }
   revalidatePath(`/dashboard/orgs/${orgId}/profile`);
   revalidatePath("/contacts");
+  revalidatePath(`/orgs/${orgId}`);
   return { ok: true, message: "Profile saved." };
 }
 
@@ -156,4 +167,79 @@ export async function decideOrganizationAction(_prev: FormState, form: FormData)
   }
   revalidatePath("/admin/organizations");
   return { ok: true, message: `Decision recorded: ${String(form.get("decision")).toLowerCase()}.` };
+}
+
+export async function uploadLogoAction(orgId: string, _prev: FormState, form: FormData): Promise<FormState> {
+  const user = await requireUser();
+  const file = form.get("logo");
+  if (!(file instanceof File) || file.size === 0) return { error: "Choose a logo to upload.", fieldErrors: { logo: ["Required"] } };
+  if (file.size > MAX_UPLOAD_BYTES) return { error: "Images must be 5 MB or smaller.", fieldErrors: { logo: ["Too large"] } };
+  try {
+    await uploadOrganizationLogo(await getDriver(), getObjectStore(), user.id, orgId, {
+      bytes: Buffer.from(await file.arrayBuffer()),
+      altText: form.get("altText"),
+    });
+  } catch (err) {
+    return toState(err);
+  }
+  revalidatePath(`/dashboard/orgs/${orgId}/profile`);
+  revalidatePath(`/orgs/${orgId}`);
+  return { ok: true, message: "Logo saved." };
+}
+
+export async function removeLogoAction(orgId: string): Promise<FormState> {
+  const user = await requireUser();
+  try {
+    await removeOrganizationLogo(await getDriver(), getObjectStore(), user.id, orgId);
+  } catch (err) {
+    return toState(err);
+  }
+  revalidatePath(`/dashboard/orgs/${orgId}/profile`);
+  revalidatePath(`/orgs/${orgId}`);
+  return { ok: true, message: "Logo removed." };
+}
+
+export async function reviewProfileAction(_prev: FormState, form: FormData): Promise<FormState> {
+  const user = await requireUser();
+  try {
+    await reviewOrganizationProfile(await getDriver(), user.id, fields(form));
+  } catch (err) {
+    return toState(err);
+  }
+  revalidatePath("/admin/profiles");
+  revalidatePath("/contacts");
+  return { ok: true, message: "Profile decision recorded." };
+}
+
+export async function createCountyAction(_prev: FormState, form: FormData): Promise<FormState> {
+  const user = await requireUser();
+  try {
+    await createCounty(await getDriver(), user.id, fields(form));
+  } catch (err) {
+    return toState(err);
+  }
+  revalidatePath("/admin/counties");
+  return { ok: true, message: "County added." };
+}
+
+export async function assignCountyAdminAction(_prev: FormState, form: FormData): Promise<FormState> {
+  const user = await requireUser();
+  try {
+    await assignCountyAdmin(await getDriver(), user.id, fields(form));
+  } catch (err) {
+    return toState(err);
+  }
+  revalidatePath("/admin/counties");
+  return { ok: true, message: "County administrator assigned. They can sign in with an emailed link." };
+}
+
+export async function revokeCountyAdminAction(assignmentId: string): Promise<FormState> {
+  const user = await requireUser();
+  try {
+    await revokeCountyAdmin(await getDriver(), user.id, assignmentId);
+  } catch (err) {
+    return toState(err);
+  }
+  revalidatePath("/admin/counties");
+  return { ok: true, message: "Access revoked and sessions ended." };
 }

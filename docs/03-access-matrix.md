@@ -9,7 +9,8 @@
 | Org VIEWER / EDITOR / ORG_ADMIN | membership in an **APPROVED** org | own org |
 | AUTHORIZED_RESPONDER | `role_assignments`, granted by platform admin (SOP-010) | **required** `scope_area` polygon, optional `org_id`, optional expiry |
 | ROAD_VERIFIER | `role_assignments` | road reports (Phase 5) |
-| PLATFORM_ADMIN | `role_assignments` (CLI bootstrap, then admin grant) | platform; MFA required in production |
+| PLATFORM_ADMIN (the Crisis Compass **Executive Administrator**) | `role_assignments` (CLI bootstrap, then admin grant) | platform; MFA required in production |
+| County administrator | `county_admin_assignments`, granted by an executive at `/admin/counties` (reason required, optional expiry, revocable, audited) | **only the assigned counties**: profile review for organizations serving them, and their own assignment list. Expired/revoked grants carry no access; MFA required in production |
 | SECURITY_ADMIN | `role_assignments` | revocations, audit (Phase 6–7) |
 
 Verification (org status) and operational authority (responder role) are independent: an approved nonprofit does **not** see responder-only logistics unless a member also holds a scoped responder assignment.
@@ -67,4 +68,4 @@ Consent is recorded (`directory_consent_at`, `directory_consent_by`) and withdra
 | **Private org** | PRIVATE_ORGANIZATION sites, history, before/after snapshots | Owning org + admins |
 | **Personal (PII)** | user emails, names, org contact email, registration notes, session/token hashes, IPs | Never in public payloads; `contact_email` not granted to `ics_app`; IPs used only in memory for rate limiting; not logged |
 | **Security** | session tokens, magic-link tokens | Stored only as SHA-256 hashes; httpOnly cookies |
-| **Prohibited** | individual requests for help, people needing help, beneficiary data | Not collected. No tables exist for them. |
+| **Prohibited (until decided)** | individual requests for help, people needing help, beneficiary data | Not collected. No tables exist for them. The Crisis Compass brief proposes collecting assistance applications; this stays prohibited until the decision and prerequisites in [09](09-crisis-compass-upgrade-plan.md) section 3 are resolved. |

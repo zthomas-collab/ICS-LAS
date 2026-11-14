@@ -3,7 +3,7 @@ import type { Driver, Tx } from "../db";
 import { runIn } from "../db/context";
 import { AppError, fromDbError } from "../errors";
 import { parseOrThrow } from "./identity";
-import { enqueueEmail, writeAudit } from "./shared";
+import { brandName, enqueueEmail, writeAudit } from "./shared";
 
 export function privilegedMfaRequired(): boolean {
   const v = process.env.REQUIRE_MFA_FOR_PRIVILEGED;
@@ -146,11 +146,15 @@ async function decideTx(driver: Driver, adminUserId: string, input: z.infer<type
           SET status = $2::org_status,
               approved_at = CASE WHEN $2 = 'APPROVED' THEN coalesce(approved_at, now()) ELSE approved_at END,
               suspended_at = CASE WHEN $2 = 'SUSPENDED' THEN now() WHEN $2 = 'APPROVED' THEN NULL ELSE suspended_at END,
+              -- Verifying the organization also approves its first public profile; later hide/re-review is a separate admin action.
+              profile_status = CASE WHEN $2 = 'APPROVED' AND profile_status = 'PENDING' THEN 'APPROVED' ELSE profile_status END,
+              profile_reviewed_by = CASE WHEN $2 = 'APPROVED' AND profile_status = 'PENDING' THEN $6::uuid ELSE profile_reviewed_by END,
+              profile_reviewed_at = CASE WHEN $2 = 'APPROVED' AND profile_status = 'PENDING' THEN now() ELSE profile_reviewed_at END,
               primary_service_type = CASE WHEN $5 THEN $4::text ELSE primary_service_type END
         WHERE id = $1 AND status::text = ANY($3::text[])
         RETURNING id, display_name, contact_email`,
       // Only a first approval sets the type; reinstatement keeps the confirmed type.
-      [input.orgId, t.to, t.from, input.primaryServiceType ?? null, input.decision === "APPROVED"],
+      [input.orgId, t.to, t.from, input.primaryServiceType ?? null, input.decision === "APPROVED", adminUserId],
     );
     if (!rows.length) throw new AppError("CONFLICT", "The organization is not in a state that allows this decision.");
     await tx.query(
@@ -185,7 +189,7 @@ async function decideTx(driver: Driver, adminUserId: string, input: z.infer<type
     await enqueueEmail(tx, {
       kind: `ORG_${input.decision}`,
       to: rows[0].contact_email,
-      subject: `HopeGrid: organization status update for ${rows[0].display_name}`,
+      subject: `${brandName()}: organization status update for ${rows[0].display_name}`,
       body: `${rows[0].display_name} ${messages[input.decision]}`,
     });
   });

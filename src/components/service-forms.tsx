@@ -4,6 +4,8 @@ import { useActionState, useEffect, useRef, useState } from "react";
 import type { FormState } from "@/app/auth/actions";
 import type { ServiceType } from "@/server/modules/directory";
 import { ORG_TYPES, ORG_TYPE_LABELS } from "@/lib/domain";
+import { SOCIAL_KINDS, SOCIAL_LABELS, type SocialKind } from "@/lib/links";
+import type { County } from "@/server/modules/counties";
 import { Field, FieldError, FormMessage, SubmitButton } from "./forms";
 
 type Action = (prev: FormState, form: FormData) => Promise<FormState>;
@@ -83,7 +85,7 @@ export function ConsentField({ defaultChecked }: { defaultChecked?: boolean }) {
       <input type="checkbox" name="directoryConsent" className="mt-1" defaultChecked={defaultChecked} />
       <span>
         <strong>List us in public Contacts.</strong> Anyone, without signing in, can see our organization name,
-        service types, description, public phone, public email, website and office ZIP code. You can withdraw this at any time from your
+        service types, description, logo, public phone, public email, website, social links, counties served and office ZIP code. A platform administrator approves the profile before it appears. You can withdraw this at any time from your
         organization profile. Your sign-in email is never published.
       </span>
     </label>
@@ -93,11 +95,13 @@ export function ConsentField({ defaultChecked }: { defaultChecked?: boolean }) {
 export function ProfileForm({
   action,
   serviceTypes,
+  counties,
   initial,
 }: {
   action: Action;
   serviceTypes: ServiceType[];
-  initial: { description: string | null; website: string | null; publicPhone: string | null; publicEmail: string | null; publicPostalCode: string | null; additional: string[]; consent: boolean; primary: string | null };
+  counties: Pick<County, "id" | "name" | "state">[];
+  initial: { description: string | null; website: string | null; publicPhone: string | null; publicEmail: string | null; publicPostalCode: string | null; additional: string[]; consent: boolean; primary: string | null; social: Partial<Record<SocialKind, string>>; countyIds: string[] };
 }) {
   const [state, formAction] = useActionState(action, {});
   const primaryType = serviceTypes.find((t) => t.code === initial.primary);
@@ -138,6 +142,32 @@ export function ProfileForm({
         </label>
       </div>
       <p className="-mt-2 text-xs text-muted">The office ZIP lets people find you in Contacts by distance even if you have no public location on the map.</p>
+      <fieldset className="rounded-lg border border-line p-3">
+        <legend className="px-1 text-sm font-semibold">Social media and other links (optional)</legend>
+        <div className="mt-1 grid gap-3 sm:grid-cols-2">
+          {SOCIAL_KINDS.map((k) => (
+            <label key={k} className="field">
+              <span>{SOCIAL_LABELS[k]}</span>
+              <input name={`social_${k}`} type="url" className="input" placeholder="https://" maxLength={300} defaultValue={initial.social[k] ?? ""} />
+            </label>
+          ))}
+        </div>
+        <FieldError state={state} name="socialLinks" />
+      </fieldset>
+      {counties.length > 0 && (
+        <fieldset className="rounded-lg border border-line p-3">
+          <legend className="px-1 text-sm font-semibold">Counties you serve</legend>
+          <div className="mt-1 grid max-h-56 gap-1 overflow-auto sm:grid-cols-2">
+            {counties.map((c) => (
+              <label key={c.id} className="flex min-h-11 items-center gap-2 text-sm">
+                <input type="checkbox" name="countyIds" value={c.id} defaultChecked={initial.countyIds.includes(c.id)} />
+                {c.name}, {c.state}
+              </label>
+            ))}
+          </div>
+          <FieldError state={state} name="countyIds" />
+        </fieldset>
+      )}
       <ServiceTypeFields serviceTypes={serviceTypes} state={state} showPrimary={false} defaultPrimary={initial.primary} defaultAdditional={initial.additional} />
       <ConsentField defaultChecked={initial.consent} />
       <SubmitButton>Save profile</SubmitButton>
@@ -269,3 +299,63 @@ export function RegisterForm({ action, serviceTypes }: { action: Action; service
   );
 }
 
+
+export function LogoForm({ uploadAction, removeAction, hasLogo, logoSrc }: { uploadAction: Action; removeAction: Action; hasLogo: boolean; logoSrc: string | null }) {
+  const [state, formAction] = useActionState(uploadAction, {});
+  const [removeState, removeFormAction] = useActionState(removeAction, {});
+  return (
+    <div className="grid gap-3">
+      <h2 className="text-lg font-semibold">Logo</h2>
+      {hasLogo && logoSrc && (
+        // eslint-disable-next-line @next/next/no-img-element -- same-origin logo route
+        <img src={logoSrc} alt="Current logo" width={72} height={72} className="h-[72px] w-[72px] rounded-lg border border-line bg-white object-contain" />
+      )}
+      <form action={formAction} className="grid gap-3">
+        <FormMessage state={state} />
+        <label className="field">
+          <span>{hasLogo ? "Replace logo" : "Upload a logo"}</span>
+          <small className="text-muted">JPEG, PNG or WebP, up to 5 MB. Shown at up to 512 px. Metadata is removed. The logo appears once your profile is approved and public.</small>
+          <input name="logo" type="file" accept="image/jpeg,image/png,image/webp" className="input" required />
+          <FieldError state={state} name="logo" />
+        </label>
+        <label className="field">
+          <span>Describe the logo</span>
+          <input name="altText" className="input" required minLength={3} maxLength={300} placeholder="Green compass with the organization name" />
+          <FieldError state={state} name="altText" />
+        </label>
+        <SubmitButton>{hasLogo ? "Replace logo" : "Upload logo"}</SubmitButton>
+      </form>
+      {hasLogo && (
+        <form action={removeFormAction} className="grid gap-2">
+          <FormMessage state={removeState} />
+          <SubmitButton className="btn btn-danger justify-self-start">Remove logo</SubmitButton>
+        </form>
+      )}
+    </div>
+  );
+}
+
+export function ProfileReviewForm({ action, orgId, current }: { action: Action; orgId: string; current: string }) {
+  const [state, formAction] = useActionState(action, {});
+  if (state.ok) return <FormMessage state={state} />;
+  const options = ["APPROVED", "HIDDEN", "PENDING"].filter((d) => d !== current);
+  return (
+    <form action={formAction} className="grid gap-2 sm:grid-cols-[10rem_1fr_auto] sm:items-end">
+      <input type="hidden" name="orgId" value={orgId} />
+      <label className="field">
+        <span>Profile decision</span>
+        <select name="decision" className="input" defaultValue={options[0]}>
+          {options.map((d) => (
+            <option key={d} value={d}>{d === "APPROVED" ? "Approve" : d === "HIDDEN" ? "Hide from public" : "Return to review"}</option>
+          ))}
+        </select>
+      </label>
+      <label className="field">
+        <span>Reason</span>
+        <input name="note" className="input" required minLength={5} maxLength={2000} />
+      </label>
+      <SubmitButton className="btn btn-secondary">Record decision</SubmitButton>
+      <div className="sm:col-span-3"><FormMessage state={state} /></div>
+    </form>
+  );
+}

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { getDriver } from "@/server/db";
 import { AppError } from "@/server/errors";
 import {
@@ -112,7 +113,9 @@ export default async function ContactsPage({ searchParams }: { searchParams: Pro
               <div className="flex flex-wrap items-start gap-3">
                 <ServiceSwatch type={primary} />
                 <div className="min-w-0 flex-1">
-                  <h2 className="text-lg font-semibold">{e.displayName}</h2>
+                  <h2 className="text-lg font-semibold">
+                    <Link href={`/orgs/${e.id}`} className="text-brand underline-offset-2 hover:underline">{e.displayName}</Link>
+                  </h2>
                   <div className="mt-1 flex flex-wrap gap-1">
                     <span className="badge tone-ok">Verified organization</span>
                     <SyntheticBadge show={e.isSynthetic} />
@@ -151,7 +154,7 @@ export default async function ContactsPage({ searchParams }: { searchParams: Pro
         )}
       </ul>
       <p className="mt-6 text-xs text-muted">
-        Listings are provided by the organizations. Hiraeth Ventures verifies that each organization exists but does not
+        Listings are provided by the organizations. The platform operator verifies that each organization exists but does not
         guarantee services. In an emergency, call 911.
       </p>
     </div>
