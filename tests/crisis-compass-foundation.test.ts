@@ -29,11 +29,12 @@ import { grantRole, makeOrg, makeUser } from "./helpers/fixtures";
 // Branding / theme configuration
 // ---------------------------------------------------------------------------
 describe("brand configuration", () => {
-  it("defaults to Crisis Compass with placeholder colors and no warnings", () => {
+  it("defaults to Crisis Compass Carolinas with the official logo and no warnings", () => {
     const b = loadBrand({});
-    expect(b.name).toBe("Crisis Compass");
+    expect(b.name).toBe("Crisis Compass Carolinas");
+    expect(b.tagline).toBe("Direction When It Matters Most");
     expect(b.colors).toEqual(DEFAULT_COLORS);
-    expect(b.logoPath).toBeNull();
+    expect(b.logoPath).toBe("/brand/logo-horizontal.png");
     expect(b.warnings).toEqual([]);
   });
 
@@ -54,8 +55,8 @@ describe("brand configuration", () => {
     });
     expect(b.colors.primary).toBe(DEFAULT_COLORS.primary);
     expect(b.colors.accent).toBe(DEFAULT_COLORS.accent);
-    expect(b.name).toBe("Crisis Compass");
-    expect(b.logoPath).toBeNull();
+    expect(b.name).toBe("Crisis Compass Carolinas");
+    expect(b.logoPath).toBe("/brand/logo-horizontal.png");
     expect(b.warnings.length).toBe(4);
     expect(brandCss(b)).not.toMatch(/[<>]|url\(|display:none/);
   });

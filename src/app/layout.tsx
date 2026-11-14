@@ -1,11 +1,15 @@
 import type { Metadata, Viewport } from "next";
 import Link from "next/link";
+import { Cormorant_Garamond, Inter } from "next/font/google";
 import "./globals.css";
 import { brandCss, getBrand } from "@/config/brand";
 import { getCurrentUser, isPrivileged } from "@/server/session";
 import { privilegedMfaRequired } from "@/server/modules/organizations";
 import { signOutAction } from "./auth/actions";
-import { BrandMark } from "@/components/brand";
+import { BrandLogo, BrandMark } from "@/components/brand";
+
+const serif = Cormorant_Garamond({ subsets: ["latin"], weight: ["500", "600", "700"], variable: "--font-serif-face", display: "swap" });
+const sans = Inter({ subsets: ["latin"], variable: "--font-sans-face", display: "swap" });
 
 const brand = getBrand();
 
@@ -25,7 +29,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const needsMfa = Boolean(user && isPrivileged(user) && !user.mfaEnrolled && privilegedMfaRequired());
   const isAdmin = user?.platformRoles.includes("PLATFORM_ADMIN") || user?.countyAdmin;
   return (
-    <html lang="en">
+    <html lang="en" className={`${serif.variable} ${sans.variable}`}>
       <head>
         {/* Theme variables come from validated config only (see src/config/brand.ts). */}
         <style id="brand-theme" dangerouslySetInnerHTML={{ __html: brandCss(brand) }} />
@@ -43,14 +47,19 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             <Link className="underline" href="/account/security?required=1">Set it up now</Link>
           </aside>
         )}
-        <header className="bg-brand text-white">
+        <header className="border-b-4 border-gold bg-brand text-white">
           <nav aria-label="Main" className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-1 gap-y-1 px-4 py-2">
-            <div className="mr-auto flex flex-wrap items-baseline gap-x-3 gap-y-0 py-1">
-              <Link href="/" className="flex items-center gap-2 self-center text-xl font-extrabold tracking-tight text-white" aria-label={`${brand.name} home`}>
-                <BrandMark logoPath={brand.logoPath} />
-                <span>{brand.name}</span>
-              </Link>
-              <span className="text-xs font-semibold text-mint sm:text-sm">{brand.tagline}</span>
+            <div className="mr-auto py-1">
+              {brand.logoPath ? (
+                <Link href="/" className="block rounded-md bg-white px-3 py-1.5 shadow-sm" aria-label={`${brand.name} home`}>
+                  <BrandLogo src={brand.logoPath} size={brand.logoSize} name={brand.name} tagline={brand.tagline} className="h-10 sm:h-12" />
+                </Link>
+              ) : (
+                <Link href="/" className="flex items-center gap-2 text-xl font-bold tracking-tight text-white" aria-label={`${brand.name} home`}>
+                  <BrandMark />
+                  <span>{brand.name}</span>
+                </Link>
+              )}
             </div>
             <Link href="/" className={navLink}>Map</Link>
             <Link href="/contacts" className={navLink}>Contacts</Link>
