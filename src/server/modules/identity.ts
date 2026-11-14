@@ -298,6 +298,40 @@ export async function requestSignIn(driver: Driver, rawEmail: unknown): Promise<
   });
 }
 
+export const publicRegistrationSchema = z.object({
+  displayName: z.string().trim().min(2, "Enter your name").max(120),
+  email: z.string().trim().toLowerCase().email("Enter a valid email address").max(254),
+  acceptTerms: checkbox.refine((v) => v === true, "Please accept the privacy notice to continue"),
+});
+
+/**
+ * Public account sign-up (residents and volunteers). Always succeeds from the caller's point of view, so it cannot be
+ * used to discover who has an account: a new address gets a confirmation link, a confirmed one gets a sign-in link.
+ */
+export async function registerPublicAccount(driver: Driver, raw: unknown): Promise<void> {
+  const input = parseOrThrow(publicRegistrationSchema, raw);
+  await runIn(driver, { kind: "system" }, async (tx) => {
+    const existing = await tx.query<{ id: string; verified: boolean }>(
+      `SELECT id, email_verified_at IS NOT NULL AS verified FROM users WHERE email = $1 AND status = 'ACTIVE'`, [input.email]);
+    if (existing.length && existing[0].verified) {
+      const token = await issueToken(tx, existing[0].id, "SIGN_IN", SIGN_IN_TTL_MIN);
+      await enqueueEmail(tx, {
+        kind: "SIGN_IN", to: input.email, subject: `Your ${brandName()} sign-in link`,
+        body: `Sign in: ${appBaseUrl()}/auth/callback?token=${token}\n\nThis link expires in ${SIGN_IN_TTL_MIN} minutes and works once.`,
+      });
+      return;
+    }
+    const user = existing.length ? { id: existing[0].id } : await upsertUser(tx, input.email, input.displayName);
+    await tx.query(`UPDATE auth_tokens SET consumed_at = now() WHERE user_id = $1 AND org_id IS NULL AND purpose = 'EMAIL_CONFIRM' AND consumed_at IS NULL`, [user.id]);
+    const token = await issueToken(tx, user.id, "EMAIL_CONFIRM", EMAIL_CONFIRM_TTL_MIN);
+    await enqueueEmail(tx, {
+      kind: "EMAIL_CONFIRM", to: input.email, subject: `${brandName()}: confirm your email`,
+      body: `Confirm your email to finish creating your account:\n${appBaseUrl()}/auth/confirm?token=${token}\n\nThis link expires in 24 hours. If you did not sign up, ignore this email.`,
+    });
+    await writeAudit(tx, { actorUserId: user.id, action: "PUBLIC_ACCOUNT_REGISTERED", subjectType: "user", subjectId: user.id });
+  });
+}
+
 export async function consumeSignIn(driver: Driver, token: string): Promise<{ sessionToken: string; userId: string }> {
   return runIn(driver, { kind: "system" }, async (tx) => {
     const t = await consumeToken(tx, token, "SIGN_IN");
