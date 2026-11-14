@@ -5,6 +5,7 @@
  *   npm run db:migrate
  *   npm run db:seed                       # synthetic demo data (labelled [SYNTHETIC])
  *   npm run admin:grant -- <email> [PLATFORM_ADMIN|SECURITY_ADMIN|ROAD_VERIFIER] "<reason>"
+ *   npm run notifications:send [-- --watch]   # deliver queued email (needs EMAIL_TRANSPORT=smtp, SMTP_URL, EMAIL_FROM)
  *   npm run mfa:reset -- <email> "<how identity was verified>"   # lost device and no recovery codes
  */
 import { createDriver } from "../src/server/db";
@@ -12,6 +13,8 @@ import { migrate } from "../src/server/db/migrate";
 import { runIn } from "../src/server/db/context";
 import { grantPlatformRole } from "../src/server/modules/organizations";
 import { operatorResetMfa } from "../src/server/modules/mfa";
+import { processNotificationJobs, queueStats } from "../src/server/modules/notifications";
+import { createTransport } from "../src/server/email";
 import { createResource, createSite } from "../src/server/modules/sites";
 import { uploadSiteImage } from "../src/server/modules/images";
 import { getObjectStore } from "../src/server/storage";
@@ -201,6 +204,22 @@ async function main() {
     const id = await grantPlatformRole(db, { email, role: role as "PLATFORM_ADMIN", reason });
     console.log(`Granted ${role} to ${email} (user ${id}). Sign in at /signin.`);
     await db.close();
+  } else if (cmd === "notifications") {
+    const transport = createTransport();
+    if (!transport.delivers) {
+      console.log("EMAIL_TRANSPORT is not smtp: nothing to deliver (jobs stay queued; see /dev/outbox).");
+    } else {
+      const db = await createDriver();
+      await migrate(db);
+      const watch = args.includes("--watch");
+      do {
+        const r = await processNotificationJobs(db, transport);
+        const q = await queueStats(db);
+        console.log(JSON.stringify({ at: new Date().toISOString(), ...r, queue: q }));
+        if (watch) await new Promise((res) => setTimeout(res, 30_000));
+      } while (watch);
+      await db.close();
+    }
   } else if (cmd === "mfa-reset") {
     const [email, reason] = args;
     if (!email || !reason) throw new Error('Usage: npm run mfa:reset -- <email> "<how identity was verified>"');
@@ -210,7 +229,7 @@ async function main() {
     console.log(`MFA removed for ${email}; their sessions were ended. They must enroll again at next sign-in.`);
     await db.close();
   } else {
-    console.log("Commands: migrate | seed | grant <email> [role] [reason] | mfa-reset <email> <reason>");
+    console.log("Commands: migrate | seed | grant <email> [role] [reason] | mfa-reset <email> <reason> | notifications [--watch]");
     process.exitCode = 1;
   }
 }

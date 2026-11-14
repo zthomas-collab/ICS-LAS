@@ -14,6 +14,7 @@
     "db:seed": "tsx scripts/cli.ts seed",
     "admin:grant": "tsx scripts/cli.ts grant",
     "mfa:reset": "tsx scripts/cli.ts mfa-reset",
+    "notifications:send": "tsx scripts/cli.ts notifications",
     "check": "npm run lint && npm run typecheck && npm test",
     "bench:viewport": "tsx scripts/bench-viewport.ts",
     "zips:import": "tsx scripts/cli.ts zips",
@@ -25,6 +26,7 @@
     "@electric-sql/pglite-postgis": "^0.2.16",
     "maplibre-gl": "^6.17.0",
     "next": "^16.4.6",
+    "nodemailer": "^10.5.0",
     "pg": "^8.23.1",
     "qrcode": "^1.5.4",
     "react": "19.2.0",
@@ -36,6 +38,7 @@
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
+    "@types/nodemailer": "^8.0.2",
     "@types/pg": "^8.23.1",
     "@types/qrcode": "^1.5.6",
     "@types/react": "^19",
