@@ -22,6 +22,7 @@
     "prebuild": "node scripts/copy-vendor.mjs"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1169.0",
     "@electric-sql/pglite": "^0.5.16",
     "@electric-sql/pglite-postgis": "^0.2.16",
     "maplibre-gl": "^6.17.0",

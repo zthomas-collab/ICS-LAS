@@ -16,9 +16,21 @@ export const SESSION_TTL_HOURS = 12;
 const EMAIL_CONFIRM_TTL_MIN = 60 * 24;
 const SIGN_IN_TTL_MIN = 15;
 
+/**
+ * Sign-in is an emailed single-use link (15 min) plus, for staff, an authenticator-app code.
+ * In production it is allowed only when that design is actually backed by real infrastructure:
+ *   AUTH_PROVIDER=magic-link-mfa  +  EMAIL_TRANSPORT=smtp (links really get delivered)  +  MFA_ENCRYPTION_KEY set.
+ * Anything else stays blocked. The old unsafe override is kept for explicit, acknowledged exceptions only.
+ */
 export function assertDevAuthAllowed(): void {
-  if (process.env.NODE_ENV === "production" && process.env.AUTH_PROVIDER !== "dev-magic-link-acknowledged-unsafe") {
-    throw new Error("Dev magic-link auth is disabled in production. Configure the managed auth provider.");
+  if (process.env.NODE_ENV !== "production") return;
+  if (process.env.AUTH_PROVIDER === "dev-magic-link-acknowledged-unsafe") return;
+  const ok =
+    process.env.AUTH_PROVIDER === "magic-link-mfa" && process.env.EMAIL_TRANSPORT === "smtp" && Boolean(process.env.MFA_ENCRYPTION_KEY);
+  if (!ok) {
+    throw new Error(
+      "Sign-in is disabled in production until AUTH_PROVIDER=magic-link-mfa, EMAIL_TRANSPORT=smtp (with SMTP_URL, EMAIL_FROM) and MFA_ENCRYPTION_KEY are configured.",
+    );
   }
 }
 
