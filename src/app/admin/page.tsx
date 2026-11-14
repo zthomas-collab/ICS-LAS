@@ -26,6 +26,10 @@ export default async function AdminHome() {
           </li>
         )}
         <li className="card p-4">
+          <Link className="text-lg font-semibold text-brand underline" href="/admin/applications">Assistance requests</Link>
+          <p className="mt-1 text-sm text-muted">Review, route and update requests for your counties.</p>
+        </li>
+        <li className="card p-4">
           <Link className="text-lg font-semibold text-brand underline" href="/admin/profiles">Organization profiles</Link>
           <p className="mt-1 text-sm text-muted">Approve or hide public profiles, logos and links.</p>
         </li>
