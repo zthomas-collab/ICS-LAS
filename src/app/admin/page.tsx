@@ -30,6 +30,16 @@ export default async function AdminHome() {
           <p className="mt-1 text-sm text-muted">Review, route and update requests for your counties.</p>
         </li>
         <li className="card p-4">
+          <Link className="text-lg font-semibold text-brand underline" href="/admin/offers">Volunteer &amp; donation offers</Link>
+          <p className="mt-1 text-sm text-muted">Review, match and track offers of help for your counties.</p>
+        </li>
+        {executive && (
+          <li className="card p-4">
+            <Link className="text-lg font-semibold text-brand underline" href="/admin/settings">Settings</Link>
+            <p className="mt-1 text-sm text-muted">Notification email for new offers and the email delivery queue.</p>
+          </li>
+        )}
+        <li className="card p-4">
           <Link className="text-lg font-semibold text-brand underline" href="/admin/profiles">Organization profiles</Link>
           <p className="mt-1 text-sm text-muted">Approve or hide public profiles, logos and links.</p>
         </li>
