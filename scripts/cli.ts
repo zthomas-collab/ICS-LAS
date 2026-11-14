@@ -5,11 +5,13 @@
  *   npm run db:migrate
  *   npm run db:seed                       # synthetic demo data (labelled [SYNTHETIC])
  *   npm run admin:grant -- <email> [PLATFORM_ADMIN|SECURITY_ADMIN|ROAD_VERIFIER] "<reason>"
+ *   npm run mfa:reset -- <email> "<how identity was verified>"   # lost device and no recovery codes
  */
 import { createDriver } from "../src/server/db";
 import { migrate } from "../src/server/db/migrate";
 import { runIn } from "../src/server/db/context";
 import { grantPlatformRole } from "../src/server/modules/organizations";
+import { operatorResetMfa } from "../src/server/modules/mfa";
 import { createResource, createSite } from "../src/server/modules/sites";
 import { uploadSiteImage } from "../src/server/modules/images";
 import { getObjectStore } from "../src/server/storage";
@@ -48,9 +50,9 @@ async function seed() {
     const org = async (name: string, type: string, phone: string, service: string, also: string[] = []) => {
       const id = (await tx.query<{ id: string }>(
         `INSERT INTO organizations (legal_name, display_name, org_type, status, contact_email, public_phone, public_email, website,
-                                    description, is_synthetic, approved_at, requested_service_type, primary_service_type, directory_consent_at)
+                                    description, is_synthetic, approved_at, requested_service_type, primary_service_type, directory_consent_at, profile_status)
          VALUES ($1, $1, $2::org_type, 'APPROVED', 'synthetic@example.invalid', $3, $4, 'https://example.org',
-                 'Synthetic demo organization. Not a real entity.', true, now(), $5, $5, now())
+                 'Synthetic demo organization. Not a real entity.', true, now(), $5, $5, now(), 'APPROVED')
          RETURNING id`,
         [name, type, phone, `contact+${service.toLowerCase()}@example.invalid`, service],
       ))[0].id;
@@ -199,8 +201,16 @@ async function main() {
     const id = await grantPlatformRole(db, { email, role: role as "PLATFORM_ADMIN", reason });
     console.log(`Granted ${role} to ${email} (user ${id}). Sign in at /signin.`);
     await db.close();
+  } else if (cmd === "mfa-reset") {
+    const [email, reason] = args;
+    if (!email || !reason) throw new Error('Usage: npm run mfa:reset -- <email> "<how identity was verified>"');
+    const db = await createDriver();
+    await migrate(db);
+    await operatorResetMfa(db, email, reason);
+    console.log(`MFA removed for ${email}; their sessions were ended. They must enroll again at next sign-in.`);
+    await db.close();
   } else {
-    console.log("Commands: migrate | seed | grant <email> [role] [reason]");
+    console.log("Commands: migrate | seed | grant <email> [role] [reason] | mfa-reset <email> <reason>");
     process.exitCode = 1;
   }
 }

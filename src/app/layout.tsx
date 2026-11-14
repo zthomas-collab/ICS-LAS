@@ -2,7 +2,8 @@ import type { Metadata, Viewport } from "next";
 import Link from "next/link";
 import "./globals.css";
 import { brandCss, getBrand } from "@/config/brand";
-import { getCurrentUser } from "@/server/session";
+import { getCurrentUser, isPrivileged } from "@/server/session";
+import { privilegedMfaRequired } from "@/server/modules/organizations";
 import { signOutAction } from "./auth/actions";
 import { BrandMark } from "@/components/brand";
 
@@ -21,6 +22,7 @@ const navLink = "rounded-md px-2 py-2 text-sm font-semibold text-white hover:bg-
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const user = await getCurrentUser();
+  const needsMfa = Boolean(user && isPrivileged(user) && !user.mfaEnrolled && privilegedMfaRequired());
   const isAdmin = user?.platformRoles.includes("PLATFORM_ADMIN") || user?.countyAdmin;
   return (
     <html lang="en">
@@ -35,6 +37,12 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <aside aria-label="Emergency information" className="bg-bad-bg px-4 py-1.5 text-center text-sm text-bad">
           <strong>Life-threatening emergency? Call 911.</strong> {brand.name} coordinates resources; it does not dispatch help.
         </aside>
+        {needsMfa && (
+          <aside aria-label="Security notice" className="bg-warn-bg px-4 py-1.5 text-center text-sm text-warn">
+            <strong>Action needed:</strong> your role requires multi-factor authentication.{" "}
+            <Link className="underline" href="/account/security?required=1">Set it up now</Link>
+          </aside>
+        )}
         <header className="bg-brand text-white">
           <nav aria-label="Main" className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-1 gap-y-1 px-4 py-2">
             <div className="mr-auto flex flex-wrap items-baseline gap-x-3 gap-y-0 py-1">
@@ -50,6 +58,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             {user ? (
               <>
                 <Link href="/dashboard" className={navLink}>Dashboard</Link>
+                <Link href="/account/security" className={navLink}>Security</Link>
                 {isAdmin && <Link href="/admin" className={navLink}>Admin</Link>}
                 <form action={signOutAction}>
                   <button className={`${navLink} underline`}>Sign out</button>

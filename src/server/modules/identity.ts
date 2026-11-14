@@ -210,7 +210,10 @@ async function consumeToken(tx: Tx, token: string, purpose: string) {
 async function createSession(tx: Tx, userId: string): Promise<string> {
   const token = newToken();
   await tx.query(
-    `INSERT INTO sessions (user_id, token_hash, expires_at) VALUES ($1, $2, now() + make_interval(hours => $3))`,
+    // A user with MFA enrolled gets a session that cannot be used until the second factor is verified.
+    `INSERT INTO sessions (user_id, token_hash, expires_at, mfa_verified_at)
+     SELECT $1, $2, now() + make_interval(hours => $3),
+            CASE WHEN u.mfa_secret_enc IS NULL THEN now() END FROM users u WHERE u.id = $1`,
     [userId, hashToken(token), SESSION_TTL_HOURS],
   );
   return token;
@@ -299,17 +302,19 @@ export type SessionUser = {
   platformRoles: string[];
   /** True when the user holds at least one active county administrator assignment. */
   countyAdmin: boolean;
+  /** Enrolled in MFA but this session has not completed the second step. Treated as signed out except for the MFA page. */
+  mfaPending: boolean;
 };
 
 export async function resolveSession(driver: Driver, sessionToken: string | undefined): Promise<SessionUser | null> {
   if (!sessionToken || sessionToken.length > 200) return null;
   return runIn(driver, { kind: "system" }, async (tx) => {
-    const rows = await tx.query<{ id: string; email: string; display_name: string; mfa_enrolled_at: Date | null }>(
+    const rows = await tx.query<{ id: string; email: string; display_name: string; mfa_enrolled_at: Date | null; mfa_verified_at: Date | null }>(
       `UPDATE sessions s SET last_seen_at = now()
          FROM users u
         WHERE s.token_hash = $1 AND s.revoked_at IS NULL AND s.expires_at > now()
           AND u.id = s.user_id AND u.status = 'ACTIVE'
-       RETURNING u.id, u.email, u.display_name, u.mfa_enrolled_at`,
+       RETURNING u.id, u.email, u.display_name, u.mfa_enrolled_at, s.mfa_verified_at`,
       [hashToken(sessionToken)],
     );
     if (!rows.length) return null;
@@ -330,6 +335,7 @@ export async function resolveSession(driver: Driver, sessionToken: string | unde
       mfaEnrolled: rows[0].mfa_enrolled_at !== null,
       platformRoles: roles.map((r) => r.role),
       countyAdmin: (counties[0]?.n ?? 0) > 0,
+      mfaPending: rows[0].mfa_enrolled_at !== null && rows[0].mfa_verified_at === null,
     };
   });
 }

@@ -9,10 +9,11 @@ import {
   consumeSignIn,
   registerOrganization,
   requestSignIn,
+  resolveSession,
   revokeSession,
 } from "@/server/modules/identity";
 import { rateLimit } from "@/server/rate-limit";
-import { clearSessionCookie, clientKey, getSessionToken, setSessionCookie } from "@/server/session";
+import { clearSessionCookie, clientKey, getSessionToken, postSignInPath, setSessionCookie } from "@/server/session";
 
 export type FormState = { error?: string; fieldErrors?: Record<string, string[]>; ok?: boolean; message?: string };
 
@@ -25,6 +26,11 @@ function toState(err: unknown): FormState {
 async function limited(bucket: string, limit: number): Promise<FormState | null> {
   const rl = rateLimit(`${bucket}:${await clientKey()}`, limit, 15 * 60_000);
   return rl.ok ? null : { error: "Too many attempts. Please wait and try again." };
+}
+
+async function landingFor(sessionToken: string): Promise<string> {
+  const user = await resolveSession(await getDriver(), sessionToken);
+  return user ? postSignInPath(user) : "/dashboard";
 }
 
 export async function registerAction(_prev: FormState, form: FormData): Promise<FormState> {
@@ -44,13 +50,15 @@ export async function registerAction(_prev: FormState, form: FormData): Promise<
 
 export async function confirmEmailAction(_prev: FormState, form: FormData): Promise<FormState> {
   assertDevAuthAllowed();
+  let target = "/dashboard";
   try {
     const { sessionToken } = await confirmEmail(await getDriver(), String(form.get("token") ?? ""));
     await setSessionCookie(sessionToken);
+    target = await landingFor(sessionToken);
   } catch (err) {
     return toState(err);
   }
-  redirect("/dashboard");
+  redirect(target);
 }
 
 export async function requestSignInAction(_prev: FormState, form: FormData): Promise<FormState> {
@@ -68,13 +76,15 @@ export async function requestSignInAction(_prev: FormState, form: FormData): Pro
 
 export async function consumeSignInAction(_prev: FormState, form: FormData): Promise<FormState> {
   assertDevAuthAllowed();
+  let target = "/dashboard";
   try {
     const { sessionToken } = await consumeSignIn(await getDriver(), String(form.get("token") ?? ""));
     await setSessionCookie(sessionToken);
+    target = await landingFor(sessionToken);
   } catch (err) {
     return toState(err);
   }
-  redirect("/dashboard");
+  redirect(target);
 }
 
 export async function signOutAction(): Promise<void> {
