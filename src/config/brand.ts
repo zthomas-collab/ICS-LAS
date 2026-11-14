@@ -8,7 +8,8 @@
  *   BRAND_COLOR_PRIMARY, BRAND_COLOR_INTERACTIVE, BRAND_COLOR_LINK, BRAND_COLOR_SOFT,
  *   BRAND_COLOR_ACCENT, BRAND_COLOR_BACKGROUND, BRAND_COLOR_TEXT   (each `#rrggbb`)
  *
- * The defaults below are PLACEHOLDERS. Final brand colors have not been supplied. Overrides are
+ * Defaults are the Crisis Compass Carolinas identity. The hex values are provisional digital tokens drawn from
+ * the official logo files (not verified official specifications). Overrides are
  * validated (strict hex only, so nothing can be injected into the generated CSS) and checked for
  * WCAG AA contrast; a failing or malformed override falls back to the default for that token.
  */
@@ -36,20 +37,25 @@ export type BrandConfig = {
   operator: string;
   /** Path under /public (served same-origin, so it satisfies the CSP), or null to use the built-in mark. */
   logoPath: string | null;
+  /** Intrinsic size of the logo file, to reserve layout space. Only known for the built-in official logo. */
+  logoSize: { width: number; height: number } | null;
   colors: BrandColors;
   /** Human-readable notes about overrides that were rejected. */
   warnings: string[];
 };
 
 export const DEFAULT_COLORS: BrandColors = {
-  primary: "#205c4b",
-  interactive: "#2684b8",
-  link: "#1d6a95",
-  soft: "#bde8d2",
-  accent: "#f0b84b",
-  background: "#faf9f4",
-  text: "#24343a",
+  primary: "#41491d", // Deep Heritage Olive
+  interactive: "#6b7352", // Muted Sage, deepened to keep >= 3:1 on white for focus rings and map graphics
+  link: "#41491d", // Deep Heritage Olive (text links)
+  soft: "#e7ddbd", // Soft Champagne
+  accent: "#b5a04d", // Refined Antique Gold (restrained accent; charcoal text on it)
+  background: "#f8f5ee", // Warm Ivory
+  text: "#20231c", // Executive Charcoal
 };
+
+/** The official logo (margin-trimmed copy of the uploaded file; originals are in /public/brand/originals). */
+export const DEFAULT_LOGO = { path: "/brand/logo-horizontal.png", width: 1541, height: 437 } as const;
 
 const HEX = /^#[0-9a-fA-F]{6}$/;
 const LOGO_PATH = /^\/[A-Za-z0-9_\-./]{1,120}\.(svg|png|webp|jpg|jpeg)$/;
@@ -115,18 +121,22 @@ export function loadBrand(env: Record<string, string | undefined> = process.env)
     return raw;
   };
 
-  let logoPath: string | null = null;
+  let logoPath: string | null = DEFAULT_LOGO.path;
+  let logoSize: BrandConfig["logoSize"] = { width: DEFAULT_LOGO.width, height: DEFAULT_LOGO.height };
   const rawLogo = env.BRAND_LOGO_PATH?.trim();
   if (rawLogo) {
-    if (LOGO_PATH.test(rawLogo) && !rawLogo.includes("..") && !rawLogo.startsWith("//")) logoPath = rawLogo;
-    else warnings.push("BRAND_LOGO_PATH ignored: use a same-origin path such as /brand/logo.svg.");
+    if (LOGO_PATH.test(rawLogo) && !rawLogo.includes("..") && !rawLogo.startsWith("//")) {
+      logoPath = rawLogo;
+      logoSize = rawLogo === DEFAULT_LOGO.path ? logoSize : null;
+    } else warnings.push("BRAND_LOGO_PATH ignored: use a same-origin path such as /brand/logo.svg.");
   }
 
   return {
-    name: text("BRAND_NAME", "Crisis Compass"),
-    tagline: text("BRAND_TAGLINE", "Coordinating help when it matters most."),
+    name: text("BRAND_NAME", "Crisis Compass Carolinas"),
+    tagline: text("BRAND_TAGLINE", "Direction When It Matters Most"),
     operator: text("BRAND_OPERATOR", "Hiraeth Ventures"),
     logoPath,
+    logoSize,
     colors,
     warnings,
   };

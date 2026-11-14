@@ -9,13 +9,13 @@
  * text; the accent is a background only (dark text on it).
  */
 :root {
-  --cc-primary: #205c4b;
-  --cc-interactive: #2684b8;
-  --cc-link: #1d6a95;
-  --cc-soft: #bde8d2;
-  --cc-accent: #f0b84b;
-  --cc-background: #faf9f4;
-  --cc-text: #24343a;
+  --cc-primary: #41491d;
+  --cc-interactive: #6b7352;
+  --cc-link: #41491d;
+  --cc-soft: #e7ddbd;
+  --cc-accent: #b5a04d;
+  --cc-background: #f8f5ee;
+  --cc-text: #20231c;
 
   --hope-forest: var(--cc-primary);        /* brand headers, navigation, primary identity */
   --community-blue: var(--cc-interactive); /* interactive map graphics, focus rings */
@@ -29,8 +29,8 @@
   --bg: var(--warm-ivory);
   --surface: var(--pure-white);
   --ink: var(--deep-charcoal);
-  --muted: #56666c;            /* 5.7:1 on ivory */
-  --line: #d6ddd8;
+  --muted: #5b5f4f;            /* 5.9:1 on ivory */
+  --line: #dcd5bb;
   --brand: var(--hope-forest);
   --brand-ink: var(--pure-white);
   --mint-soft: color-mix(in srgb, var(--cc-soft) 35%, white);
@@ -70,19 +70,21 @@
   --color-bad: var(--bad);
   --color-bad-bg: var(--bad-bg);
   --color-neutral-bg: var(--neutral-bg);
-  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-sans: var(--font-sans-face), system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-serif: var(--font-serif-face), "Libre Baskerville", Georgia, "Times New Roman", serif;
 }
 
 html, body { height: 100%; }
 body { background: var(--bg); color: var(--ink); font-family: var(--font-sans); }
 :focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 a { color: inherit; }
+h1, h2 { font-family: var(--font-serif); font-weight: 600; letter-spacing: 0.005em; }
 .text-brand { color: var(--link); } /* legacy class name: brand-coloured text links use the AA blue */
 
 .field { display: grid; gap: 0.25rem; }
 .field > span { font-size: 0.875rem; font-weight: 600; }
 .input {
-  width: 100%; border: 1px solid #b7c2bd; background: var(--surface); color: var(--ink);
+  width: 100%; border: 1px solid #b9b496; background: var(--surface); color: var(--ink);
   border-radius: 0.5rem; padding: 0.6rem 0.75rem; font-size: 1rem; min-height: 44px;
 }
 .input:focus-visible { border-color: var(--community-blue); }
@@ -97,7 +99,7 @@ a { color: inherit; }
 .btn-attention { background: var(--hope-gold); color: var(--deep-charcoal); }
 .btn-attention:hover { background: color-mix(in srgb, var(--cc-accent) 90%, black); }
 .btn-secondary { background: var(--surface); color: var(--link); border-color: var(--link); }
-.btn-secondary:hover { background: #eef6fb; }
+.btn-secondary:hover { background: color-mix(in srgb, var(--cc-soft) 45%, white); }
 .btn-danger { background: var(--surface); color: var(--bad); border-color: var(--bad); }
 .card { background: var(--surface); border: 1px solid var(--line); border-radius: 0.75rem; }
 .badge { display: inline-flex; align-items: center; gap: 0.25rem; border-radius: 999px; padding: 0.1rem 0.55rem; font-size: 0.75rem; font-weight: 600; }

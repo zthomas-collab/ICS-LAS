@@ -16,9 +16,21 @@ export const SESSION_TTL_HOURS = 12;
 const EMAIL_CONFIRM_TTL_MIN = 60 * 24;
 const SIGN_IN_TTL_MIN = 15;
 
+/**
+ * Sign-in is an emailed single-use link (15 min) plus, for staff, an authenticator-app code.
+ * In production it is allowed only when that design is actually backed by real infrastructure:
+ *   AUTH_PROVIDER=magic-link-mfa  +  EMAIL_TRANSPORT=smtp (links really get delivered)  +  MFA_ENCRYPTION_KEY set.
+ * Anything else stays blocked. The old unsafe override is kept for explicit, acknowledged exceptions only.
+ */
 export function assertDevAuthAllowed(): void {
-  if (process.env.NODE_ENV === "production" && process.env.AUTH_PROVIDER !== "dev-magic-link-acknowledged-unsafe") {
-    throw new Error("Dev magic-link auth is disabled in production. Configure the managed auth provider.");
+  if (process.env.NODE_ENV !== "production") return;
+  if (process.env.AUTH_PROVIDER === "dev-magic-link-acknowledged-unsafe") return;
+  const ok =
+    process.env.AUTH_PROVIDER === "magic-link-mfa" && process.env.EMAIL_TRANSPORT === "smtp" && Boolean(process.env.MFA_ENCRYPTION_KEY);
+  if (!ok) {
+    throw new Error(
+      "Sign-in is disabled in production until AUTH_PROVIDER=magic-link-mfa, EMAIL_TRANSPORT=smtp (with SMTP_URL, EMAIL_FROM) and MFA_ENCRYPTION_KEY are configured.",
+    );
   }
 }
 
@@ -210,7 +222,10 @@ async function consumeToken(tx: Tx, token: string, purpose: string) {
 async function createSession(tx: Tx, userId: string): Promise<string> {
   const token = newToken();
   await tx.query(
-    `INSERT INTO sessions (user_id, token_hash, expires_at) VALUES ($1, $2, now() + make_interval(hours => $3))`,
+    // A user with MFA enrolled gets a session that cannot be used until the second factor is verified.
+    `INSERT INTO sessions (user_id, token_hash, expires_at, mfa_verified_at)
+     SELECT $1, $2, now() + make_interval(hours => $3),
+            CASE WHEN u.mfa_secret_enc IS NULL THEN now() END FROM users u WHERE u.id = $1`,
     [userId, hashToken(token), SESSION_TTL_HOURS],
   );
   return token;
@@ -283,6 +298,40 @@ export async function requestSignIn(driver: Driver, rawEmail: unknown): Promise<
   });
 }
 
+export const publicRegistrationSchema = z.object({
+  displayName: z.string().trim().min(2, "Enter your name").max(120),
+  email: z.string().trim().toLowerCase().email("Enter a valid email address").max(254),
+  acceptTerms: checkbox.refine((v) => v === true, "Please accept the privacy notice to continue"),
+});
+
+/**
+ * Public account sign-up (residents and volunteers). Always succeeds from the caller's point of view, so it cannot be
+ * used to discover who has an account: a new address gets a confirmation link, a confirmed one gets a sign-in link.
+ */
+export async function registerPublicAccount(driver: Driver, raw: unknown): Promise<void> {
+  const input = parseOrThrow(publicRegistrationSchema, raw);
+  await runIn(driver, { kind: "system" }, async (tx) => {
+    const existing = await tx.query<{ id: string; verified: boolean }>(
+      `SELECT id, email_verified_at IS NOT NULL AS verified FROM users WHERE email = $1 AND status = 'ACTIVE'`, [input.email]);
+    if (existing.length && existing[0].verified) {
+      const token = await issueToken(tx, existing[0].id, "SIGN_IN", SIGN_IN_TTL_MIN);
+      await enqueueEmail(tx, {
+        kind: "SIGN_IN", to: input.email, subject: `Your ${brandName()} sign-in link`,
+        body: `Sign in: ${appBaseUrl()}/auth/callback?token=${token}\n\nThis link expires in ${SIGN_IN_TTL_MIN} minutes and works once.`,
+      });
+      return;
+    }
+    const user = existing.length ? { id: existing[0].id } : await upsertUser(tx, input.email, input.displayName);
+    await tx.query(`UPDATE auth_tokens SET consumed_at = now() WHERE user_id = $1 AND org_id IS NULL AND purpose = 'EMAIL_CONFIRM' AND consumed_at IS NULL`, [user.id]);
+    const token = await issueToken(tx, user.id, "EMAIL_CONFIRM", EMAIL_CONFIRM_TTL_MIN);
+    await enqueueEmail(tx, {
+      kind: "EMAIL_CONFIRM", to: input.email, subject: `${brandName()}: confirm your email`,
+      body: `Confirm your email to finish creating your account:\n${appBaseUrl()}/auth/confirm?token=${token}\n\nThis link expires in 24 hours. If you did not sign up, ignore this email.`,
+    });
+    await writeAudit(tx, { actorUserId: user.id, action: "PUBLIC_ACCOUNT_REGISTERED", subjectType: "user", subjectId: user.id });
+  });
+}
+
 export async function consumeSignIn(driver: Driver, token: string): Promise<{ sessionToken: string; userId: string }> {
   return runIn(driver, { kind: "system" }, async (tx) => {
     const t = await consumeToken(tx, token, "SIGN_IN");
@@ -299,17 +348,19 @@ export type SessionUser = {
   platformRoles: string[];
   /** True when the user holds at least one active county administrator assignment. */
   countyAdmin: boolean;
+  /** Enrolled in MFA but this session has not completed the second step. Treated as signed out except for the MFA page. */
+  mfaPending: boolean;
 };
 
 export async function resolveSession(driver: Driver, sessionToken: string | undefined): Promise<SessionUser | null> {
   if (!sessionToken || sessionToken.length > 200) return null;
   return runIn(driver, { kind: "system" }, async (tx) => {
-    const rows = await tx.query<{ id: string; email: string; display_name: string; mfa_enrolled_at: Date | null }>(
+    const rows = await tx.query<{ id: string; email: string; display_name: string; mfa_enrolled_at: Date | null; mfa_verified_at: Date | null }>(
       `UPDATE sessions s SET last_seen_at = now()
          FROM users u
         WHERE s.token_hash = $1 AND s.revoked_at IS NULL AND s.expires_at > now()
           AND u.id = s.user_id AND u.status = 'ACTIVE'
-       RETURNING u.id, u.email, u.display_name, u.mfa_enrolled_at`,
+       RETURNING u.id, u.email, u.display_name, u.mfa_enrolled_at, s.mfa_verified_at`,
       [hashToken(sessionToken)],
     );
     if (!rows.length) return null;
@@ -330,6 +381,7 @@ export async function resolveSession(driver: Driver, sessionToken: string | unde
       mfaEnrolled: rows[0].mfa_enrolled_at !== null,
       platformRoles: roles.map((r) => r.role),
       countyAdmin: (counties[0]?.n ?? 0) > 0,
+      mfaPending: rows[0].mfa_enrolled_at !== null && rows[0].mfa_verified_at === null,
     };
   });
 }

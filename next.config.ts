@@ -44,7 +44,7 @@ const nextConfig: NextConfig = {
         ],
       },
       // Authenticated and admin areas must never be indexed.
-      { source: "/(dashboard|admin|auth|dev)/:path*", headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow" }] },
+      { source: "/(dashboard|admin|auth|dev|account)/:path*", headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow" }] },
     ];
   },
 };

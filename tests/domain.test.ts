@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { freshDb } from "./helpers/db";
 import { runIn } from "@/server/db/context";
-import { STATUS_KEY, bestSiteStatus, directionsUrl, displayAvailability, isResourceVisibilityAllowed, telHref } from "@/lib/domain";
+import { STATUS_KEY, bestSiteStatus, directionsLinks, directionsUrl, displayAvailability, preferredMapApp, isResourceVisibilityAllowed, telHref } from "@/lib/domain";
 
 describe("displayAvailability", () => {
   it("never shows Available when the confirmation expired", () => {
@@ -36,6 +36,22 @@ describe("contact helpers", () => {
   it("builds safe tel: and directions links", () => {
     expect(telHref("(828) 555-0100 ext")).toBe("tel:8285550100");
     expect(directionsUrl(35.5951234, -82.5515)).toBe("https://www.openstreetmap.org/directions?to=35.595123%2C-82.551500");
+  });
+});
+
+describe("directions for the phone's own map app", () => {
+  it("builds Google, Apple, Waze, OSM and geo: links for the same point", () => {
+    const l = directionsLinks(35.5951234, -82.5515);
+    expect(l.google).toBe("https://www.google.com/maps/dir/?api=1&destination=35.595123%2C-82.551500&travelmode=driving");
+    expect(l.apple).toBe("https://maps.apple.com/?daddr=35.595123,-82.551500&dirflg=d");
+    expect(l.waze).toBe("https://waze.com/ul?ll=35.595123%2C-82.551500&navigate=yes");
+    expect(l.osm).toBe(directionsUrl(35.5951234, -82.5515));
+    expect(l.device).toBe("geo:35.595123,-82.551500?q=35.595123,-82.551500");
+  });
+  it("leads with the app that fits the device", () => {
+    expect(preferredMapApp("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)")).toBe("apple");
+    expect(preferredMapApp("Mozilla/5.0 (Linux; Android 14; Pixel 8)")).toBe("device");
+    expect(preferredMapApp("Mozilla/5.0 (Windows NT 10.0; Win64; x64)")).toBe("google");
   });
 });
 

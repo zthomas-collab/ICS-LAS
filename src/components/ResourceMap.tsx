@@ -6,7 +6,6 @@ import type { Map as MLMap, GeoJSONSource } from "maplibre-gl";
 import {
   STATUS_KEY,
   bestSiteStatus,
-  directionsUrl,
   displayAvailability,
   telHref,
   type AvailabilityStatus,
@@ -14,6 +13,7 @@ import {
   type StatusKind,
 } from "@/lib/domain";
 import { StatusIcon, StatusPill } from "./status-icons";
+import { DirectionsMenu } from "./DirectionsMenu";
 import type { MapResult, MapSite, PlaceHit } from "@/server/modules/map";
 import type { ServiceType } from "@/server/modules/directory";
 
@@ -471,9 +471,7 @@ function SiteDetail({ site, stale, onClose }: { site: MapSite; stale: boolean; o
       <p className="mt-1 text-xs text-muted">Site last confirmed {fmtTime(site.lastConfirmedAt)}{stale ? " · this view may be out of date" : ""}</p>
       <div className="mt-3 flex flex-wrap gap-2">
         {site.publicPhone && <a className="btn btn-primary" href={telHref(site.publicPhone)}>Call {site.publicPhone}</a>}
-        {isPublic && (
-          <a className="btn btn-secondary" href={directionsUrl(site.lat, site.lng)} target="_blank" rel="noopener noreferrer">Directions</a>
-        )}
+        {isPublic && <DirectionsMenu lat={site.lat} lng={site.lng} />}
       </div>
       <h3 className="mt-4 font-semibold">Resources</h3>
       <ul className="mt-1 divide-y divide-line">

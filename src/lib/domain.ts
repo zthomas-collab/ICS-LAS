@@ -128,6 +128,37 @@ export function directionsUrl(lat: number, lng: number): string {
   return `https://www.openstreetmap.org/directions?to=${lat.toFixed(6)}%2C${lng.toFixed(6)}`;
 }
 
+export type MapApp = "google" | "apple" | "waze" | "osm" | "device";
+
+export const MAP_APP_LABELS: Record<MapApp, string> = {
+  google: "Google Maps",
+  apple: "Apple Maps",
+  waze: "Waze",
+  osm: "OpenStreetMap",
+  device: "Maps on this phone",
+};
+
+/** Turn-by-turn links for each navigation app. All are https universal links except `device` (geo:, Android). */
+export function directionsLinks(lat: number, lng: number): Record<MapApp, string> {
+  const a = lat.toFixed(6);
+  const b = lng.toFixed(6);
+  return {
+    google: `https://www.google.com/maps/dir/?api=1&destination=${a}%2C${b}&travelmode=driving`,
+    apple: `https://maps.apple.com/?daddr=${a},${b}&dirflg=d`,
+    waze: `https://waze.com/ul?ll=${a}%2C${b}&navigate=yes`,
+    osm: directionsUrl(lat, lng),
+    device: `geo:${a},${b}?q=${a},${b}`,
+  };
+}
+
+/** The app to lead with for this device. Unknown devices get Google Maps (opens its app when installed). */
+export function preferredMapApp(userAgent: string): MapApp {
+  if (/iPhone|iPad|iPod/i.test(userAgent)) return "apple";
+  if (/Android/i.test(userAgent)) return "device";
+  if (/Macintosh/i.test(userAgent)) return "apple";
+  return "google";
+}
+
 export function telHref(phone: string): string {
   return `tel:${phone.replace(/[^0-9+]/g, "")}`;
 }

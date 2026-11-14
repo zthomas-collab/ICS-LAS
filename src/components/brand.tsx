@@ -19,3 +19,19 @@ export function BrandMark({ size = 28, logoPath }: { size?: number; logoPath?: s
     </svg>
   );
 }
+
+/**
+ * The official full logo (compass, name, region and tagline in one lockup). Never recolored or redrawn:
+ * it is shown only as the supplied artwork, scaled proportionally by height, on a light background.
+ */
+export function BrandLogo({ src, size, name, tagline, className = "" }: { src: string; size: { width: number; height: number } | null; name: string; tagline: string; className?: string }) {
+  return (
+    <img
+      src={src}
+      alt={`${name} — ${tagline}`}
+      width={size?.width}
+      height={size?.height}
+      className={`w-auto ${className}`}
+    />
+  );
+}
